@@ -59,7 +59,7 @@ function normalizeTeam(team, index) {
 }
 
 function normalizeEvent(event, index) {
-  const action = String(event.action ?? event.type ?? '').toLowerCase();
+  const action = String(event.action ?? event.payload?.action ?? event.kind ?? event.type ?? '').toLowerCase();
   const kind = action.includes('merge')
     ? 'merged'
     : action.includes('clos')
@@ -98,22 +98,28 @@ function finiteNumber(value) {
 
 export function findNewEvents(previous, next) {
   if (!previous) return [];
-  const known = new Set();
-  const key = (event) => event.number == null
-    ? `${event.id}:${event.kind}`
-    : `${event.team.toLowerCase()}:${event.number}:${event.kind}`;
-  for (const event of [...(previous.events ?? []), ...(previous.pullRequests ?? [])]) {
-    if (['opened', 'closed', 'merged'].includes(event.kind)) known.add(key(event));
-  }
+  const known = new Set((previous.events ?? [])
+    .filter(isLifecycleEvent)
+    .map(lifecycleEventKey));
 
   const detected = [];
   const added = new Set();
-  for (const event of [...(next.events ?? []), ...(next.pullRequests ?? [])]) {
-    if (!['opened', 'closed', 'merged'].includes(event.kind)) continue;
-    const eventKey = key(event);
+  for (const event of next.events ?? []) {
+    if (!isLifecycleEvent(event)) continue;
+    const eventKey = lifecycleEventKey(event);
     if (known.has(eventKey) || added.has(eventKey)) continue;
     detected.push(event);
     added.add(eventKey);
   }
   return detected;
+}
+
+export function lifecycleEventKey(event) {
+  const team = String(event.team ?? '').toLowerCase();
+  const identity = event.id ?? `${event.number ?? 'unknown'}:${event.timestamp ?? ''}`;
+  return `${team}:${identity}:${event.kind}`;
+}
+
+function isLifecycleEvent(event) {
+  return ['opened', 'closed', 'merged'].includes(event.kind);
 }

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { fetchPortwatchSnapshot, findNewEvents } from '../lib/portwatch.js';
+import { fetchPortwatchSnapshot, findNewEvents, lifecycleEventKey } from '../lib/portwatch.js';
 
 const POLL_MS = 10_000;
 
@@ -8,6 +8,7 @@ export function usePortwatch(onEvents) {
   const [connection, setConnection] = useState('connecting');
   const [error, setError] = useState('');
   const previous = useRef(null);
+  const seenEvents = useRef(new Set());
   const notify = useRef(onEvents);
   notify.current = onEvents;
 
@@ -26,7 +27,13 @@ export function usePortwatch(onEvents) {
           setError(next.message || 'The Portwatch feed adapter is not configured yet.');
           return;
         }
-        const detected = findNewEvents(previous.current, next);
+        const detected = findNewEvents(previous.current, next)
+          .filter((event) => !seenEvents.current.has(lifecycleEventKey(event)));
+        for (const event of next.events ?? []) {
+          if (['opened', 'closed', 'merged'].includes(event.kind)) {
+            seenEvents.current.add(lifecycleEventKey(event));
+          }
+        }
         previous.current = next;
         setSnapshot(next);
         setConnection('live');
