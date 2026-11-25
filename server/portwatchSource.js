@@ -2,7 +2,7 @@ const TRACKER_URL = 'https://portwatch-vi.xyz/data/tracker.json';
 const GITHUB_API = 'https://api.github.com';
 const TRACKER_CACHE_MS = 5 * 60_000;
 const COUNT_CACHE_MS = 5 * 60_000;
-const PR_CACHE_MS = 60_000;
+const PR_CACHE_MS = 10_000;
 
 const TEAMS = [
   { id: 'zettrox', name: 'ZETTROX', color: '#b483ff' },
@@ -88,8 +88,11 @@ async function fetchTeamActivity(efforts) {
       if (!Array.isArray(openPulls)) throw new Error(`GitHub returned an invalid open pull request list for ${repo}.`);
 
       const oldEvents = new Map((prior[id]?.events ?? []).map((event) => [event.id, event.pullRequest]));
+      const previousCurrentPull = prior[id]?.pullRequests?.[0];
       const currentPullRequest = openPulls[0]
-        ? await fetchJson(`${GITHUB_API}/repos/${repo}/pulls/${openPulls[0].number}`).catch(() => openPulls[0])
+        ? previousCurrentPull?.number === openPulls[0].number && previousCurrentPull?.updated_at === openPulls[0].updated_at
+          ? previousCurrentPull
+          : await fetchJson(`${GITHUB_API}/repos/${repo}/pulls/${openPulls[0].number}`).catch(() => openPulls[0])
         : null;
       const lifecycleEvents = eventFeed.events.filter(isPullRequestLifecycleEvent);
       const displayEvents = await Promise.all(lifecycleEvents.slice(0, 6).map(async (event) => {
@@ -134,14 +137,14 @@ async function fetchPullEvents(repo) {
   const cutoff = Date.now() - 86_400_000;
   const events = [];
   let truncated = false;
-  for (let page = 1; page <= 3; page += 1) {
+  for (let page = 1; page <= 1; page += 1) {
     const url = `${GITHUB_API}/repos/${repo}/events?per_page=100&page=${page}`;
     const batch = await fetchJson(url);
     if (!Array.isArray(batch)) throw new Error(`GitHub returned an invalid activity feed for ${repo}.`);
     events.push(...batch);
     const oldest = batch.at(-1)?.created_at;
     if (!batch.length || batch.length < 100 || !oldest || Date.parse(oldest) < cutoff) break;
-    if (page === 3) truncated = true;
+    if (page === 1 && batch.length === 100 && Date.parse(oldest) >= cutoff) truncated = true;
   }
   return { events: events.sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at)), truncated };
 }

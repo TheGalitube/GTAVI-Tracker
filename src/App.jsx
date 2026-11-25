@@ -130,7 +130,7 @@ export default function App() {
         </div>
 
         <div id="teams"><TeamTable teams={teams} /></div>
-        <footer className="source-line"><span>Race data: <a href="https://portwatch-vi.xyz/" target="_blank" rel="noreferrer">portwatch-vi.xyz</a></span><span>Refreshes every 30 seconds</span></footer>
+        <footer className="source-line"><span>Race data: <a href="https://portwatch-vi.xyz/" target="_blank" rel="noreferrer">portwatch-vi.xyz</a></span><span>PR alerts check every 10 seconds · race stats refresh every 5 minutes</span></footer>
       </main>
 
       <TransientPRAlert key={`${activeAlert?.id ?? 'none'}-${activeAlert?.kind ?? ''}`} event={activeAlert} onDismiss={dismissAlert} />

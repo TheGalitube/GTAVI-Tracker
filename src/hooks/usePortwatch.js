@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { fetchPortwatchSnapshot, findNewEvents } from '../lib/portwatch.js';
 
-const POLL_MS = 30_000;
+const POLL_MS = 10_000;
 
 export function usePortwatch(onEvents) {
   const [snapshot, setSnapshot] = useState(null);

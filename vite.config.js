@@ -1,4 +1,5 @@
 import { defineConfig, loadEnv } from 'vite';
+import { audioMiddleware } from './server/audioFiles.js';
 import { getPortwatchSnapshot } from './server/portwatchSource.js';
 
 async function portwatchMiddleware(req, res, next) {
@@ -16,7 +17,10 @@ async function portwatchMiddleware(req, res, next) {
 }
 
 function portwatchPlugin() {
-  const attach = (server) => { server.middlewares.use(portwatchMiddleware); };
+  const attach = (server) => {
+    server.middlewares.use(audioMiddleware);
+    server.middlewares.use(portwatchMiddleware);
+  };
   return {
     name: 'portwatch-live-data',
     configureServer: attach,

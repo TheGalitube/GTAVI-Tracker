@@ -23,8 +23,10 @@ function labelFor(url, index) {
 }
 
 export default function BackgroundMusic() {
-  const [tracks, setTracks] = useState(readPlaylist);
+  const [urls, setUrls] = useState(readPlaylist);
   const [draft, setDraft] = useState(() => readPlaylist().join('\n'));
+  const [localTracks, setLocalTracks] = useState([]);
+  const [localConfigMessage, setLocalConfigMessage] = useState('');
   const [currentIndex, setCurrentIndex] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [volume, setVolume] = useState(() => {
@@ -35,9 +37,41 @@ export default function BackgroundMusic() {
   const audioRef = useRef(null);
 
   useEffect(() => {
+    let stopped = false;
+    fetch('/api/audio/tracks')
+      .then(async (response) => {
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.message || 'Could not read local music configuration.');
+        return data;
+      })
+      .then((data) => {
+        if (!stopped) setLocalTracks(Array.isArray(data.tracks) ? data.tracks : []);
+      })
+      .catch((error) => {
+        if (!stopped) setLocalConfigMessage(error.message || 'Local file paths are available when running the app with its Vite server.');
+      });
+    return () => { stopped = true; };
+  }, []);
+
+  useEffect(() => {
     if (audioRef.current) audioRef.current.volume = volume;
     localStorage.setItem(VOLUME_KEY, String(volume));
   }, [volume]);
+
+  const tracks = [
+    ...localTracks.map((track) => ({
+      id: `local-${track.id}`,
+      title: track.title,
+      src: `/api/audio/${track.id}`,
+      available: track.available,
+    })),
+    ...urls.map((url, index) => ({
+      id: `url-${index}`,
+      title: labelFor(url, index),
+      src: url,
+      available: true,
+    })),
+  ];
 
   const playTrack = async (index) => {
     const audio = audioRef.current;
@@ -46,9 +80,14 @@ export default function BackgroundMusic() {
       return;
     }
     const nextIndex = (index + tracks.length) % tracks.length;
+    if (!tracks[nextIndex].available) {
+      setCurrentIndex(nextIndex);
+      setMessage(`The configured file “${tracks[nextIndex].title}” was not found. Check its path in music.config.json.`);
+      return;
+    }
     setCurrentIndex(nextIndex);
-    if (audio.src !== tracks[nextIndex]) {
-      audio.src = tracks[nextIndex];
+    if (audio.src !== new URL(tracks[nextIndex].src, window.location.href).href) {
+      audio.src = tracks[nextIndex].src;
       audio.load();
     }
     try {
@@ -57,16 +96,12 @@ export default function BackgroundMusic() {
       setMessage('');
     } catch {
       setPlaying(false);
-      setMessage('This audio URL could not be played. Check that it links directly to a supported audio stream or file.');
+      setMessage('This audio source could not be played. Check that it is a supported audio file or stream.');
     }
   };
 
   const savePlaylist = () => {
     const urls = draft.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
-    if (!urls.length) {
-      setMessage('Paste one or more direct audio URLs, one per line.');
-      return;
-    }
     for (const value of urls) {
       try {
         const url = new URL(value);
@@ -87,11 +122,11 @@ export default function BackgroundMusic() {
       audioRef.current.load();
     }
     localStorage.setItem(STORAGE_KEY, JSON.stringify(urls));
-    setTracks(urls);
+    setUrls(urls);
     setDraft(urls.join('\n'));
     setCurrentIndex(0);
     setPlaying(false);
-    setMessage(`${urls.length} ${urls.length === 1 ? 'track' : 'tracks'} saved. Press play to start.`);
+    setMessage(`${urls.length} direct ${urls.length === 1 ? 'track' : 'tracks'} saved. Press play to start.`);
   };
 
   const clearPlaylist = () => {
@@ -99,11 +134,11 @@ export default function BackgroundMusic() {
     audioRef.current?.removeAttribute('src');
     audioRef.current?.load();
     localStorage.removeItem(STORAGE_KEY);
-    setTracks([]);
+    setUrls([]);
     setDraft('');
     setCurrentIndex(0);
     setPlaying(false);
-    setMessage('Playlist cleared.');
+    setMessage('Direct audio links cleared.');
   };
 
   const currentTrack = tracks[currentIndex];
@@ -113,7 +148,11 @@ export default function BackgroundMusic() {
       <summary className="preview-button music-settings__trigger"><Music2 size={16} /> Background music <span>{tracks.length ? `${tracks.length} tracks` : 'Set up'}</span></summary>
       <section className="music-settings__panel" aria-label="Background music settings">
         <h2>Audio playlist</h2>
-        <label htmlFor="audio-playlist">Direct audio URLs</label>
+        <p className="music-settings__hint">Local files are read from <code>music.config.json</code> in the project folder. Copy <code>music.config.example.json</code> and set each file path there.</p>
+        {localTracks.length > 0 && <p className="music-settings__track">{localTracks.filter((track) => track.available).length} local {localTracks.filter((track) => track.available).length === 1 ? 'track' : 'tracks'} configured</p>}
+        {localConfigMessage && <p className="music-settings__message" role="status">{localConfigMessage}</p>}
+        {localTracks.some((track) => !track.available) && <p className="music-settings__message" role="status">One or more configured files could not be found. Check the paths in music.config.json.</p>}
+        <label htmlFor="audio-playlist">Extra direct audio URLs, one per line</label>
         <textarea
           id="audio-playlist"
           rows={3}
@@ -122,21 +161,21 @@ export default function BackgroundMusic() {
           placeholder={'https://example.com/track-one.mp3\nhttps://example.com/track-two.ogg'}
           spellCheck="false"
         />
-        <p className="music-settings__hint">Add one audio file or stream URL per line. YouTube links are not supported.</p>
+        <p className="music-settings__hint">Direct audio links are saved in this browser. YouTube links are not supported.</p>
         <div className="music-settings__actions">
           <button className="music-control music-control--primary" onClick={savePlaylist}>Save playlist</button>
           <button className="music-control" onClick={() => playing ? audioRef.current?.pause() : playTrack(currentIndex)} disabled={!tracks.length} aria-label={playing ? 'Pause music' : 'Play music'}>
             {playing ? <Pause size={15} /> : <Play size={15} />}{playing ? 'Pause' : 'Play'}
           </button>
           <button className="music-control" onClick={() => playTrack(currentIndex + 1)} disabled={tracks.length < 2} aria-label="Play next track"><SkipForward size={15} />Next</button>
-          <button className="music-control music-control--icon" onClick={clearPlaylist} disabled={!tracks.length} aria-label="Clear playlist" title="Clear playlist"><Trash2 size={15} /></button>
+          <button className="music-control music-control--icon" onClick={clearPlaylist} disabled={!urls.length} aria-label="Clear direct audio links" title="Clear direct audio links"><Trash2 size={15} /></button>
         </div>
         <div className="music-settings__volume">
           <label htmlFor="audio-volume">Volume</label>
           <input id="audio-volume" type="range" min="0" max="1" step="0.01" value={volume} onChange={(event) => setVolume(Number(event.target.value))} />
           <span>{Math.round(volume * 100)}%</span>
         </div>
-        {currentTrack && <p className="music-settings__track" title={currentTrack}>{playing ? 'Now playing' : 'Selected'}: {labelFor(currentTrack, currentIndex)}</p>}
+        {currentTrack && <p className="music-settings__track" title={currentTrack.title}>{playing ? 'Now playing' : 'Selected'}: {currentTrack.title}</p>}
         {message && <p className="music-settings__message" role="status">{message}</p>}
         <audio ref={audioRef} hidden preload="none" onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)} onEnded={() => tracks.length > 1 ? playTrack(currentIndex + 1) : setPlaying(false)} onError={() => { setPlaying(false); setMessage('Could not load this audio URL. It may be unavailable or not a direct audio stream.'); }} />
       </section>
