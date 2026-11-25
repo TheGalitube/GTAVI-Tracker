@@ -9,10 +9,10 @@ export default function CurrentPullRequest({ pullRequests }) {
   return (
     <section className="current-pr" aria-label="Current pull request">
       <span className="current-label">CURRENT PULL REQUEST</span>
-      {currentPullRequest ? <>
+      {currentPullRequest ? <div className={pullRequests.length > 1 ? "current-pr__entry" : undefined} key={currentPullRequest.id}>
         <a className="current-title" href={currentPullRequest.url || undefined} target={currentPullRequest.url ? '_blank' : undefined} rel="noreferrer"><Github size={23} /><strong>#{currentPullRequest.number}</strong><span>{currentPullRequest.title}</span></a>
         <div className="current-meta"><span className="team-pill">{currentPullRequest.team}</span><span>{currentPullRequest.author}</span><span className="change additions">+{currentPullRequest.additions ?? '—'}</span><span className="change deletions">−{currentPullRequest.deletions ?? '—'}</span><span>{currentPullRequest.files ?? '—'} files</span><span>{currentPullRequest.commits ?? '—'} commits</span></div>
-      </> : <div className="current-empty">The latest active pull request will appear here.</div>}
+      </div> : <div className="current-empty">The latest active pull request will appear here.</div>}
       {pullRequests.length > 1 && (
         <div className="current-pr__timer" aria-hidden="true">
           <span key={index} onAnimationEnd={showNext} />
