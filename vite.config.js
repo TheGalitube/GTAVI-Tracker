@@ -1,4 +1,4 @@
-import { defineConfig } from 'vite';
+import { defineConfig, loadEnv } from 'vite';
 import { getPortwatchSnapshot } from './server/portwatchSource.js';
 
 async function portwatchMiddleware(req, res, next) {
@@ -24,9 +24,14 @@ function portwatchPlugin() {
   };
 }
 
-export default defineConfig({
-  plugins: [portwatchPlugin()],
-  esbuild: { jsx: 'automatic' },
-  server: { host: '0.0.0.0' },
-  preview: { host: '0.0.0.0' },
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, process.cwd(), '');
+  process.env.GITHUB_TOKEN ||= env.GITHUB_TOKEN;
+
+  return {
+    plugins: [portwatchPlugin()],
+    esbuild: { jsx: 'automatic' },
+    server: { host: '0.0.0.0' },
+    preview: { host: '0.0.0.0' },
+  };
 });

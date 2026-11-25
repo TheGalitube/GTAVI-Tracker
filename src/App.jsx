@@ -50,6 +50,7 @@ export default function App() {
   }, [playChime, muteFutureAlerts]);
 
   const { snapshot, connection, error } = usePortwatch(onEvents);
+  const sourceWarning = snapshot?.sourceWarnings?.[0];
   const teams = snapshot?.teams ?? [];
   const teamColors = new Map(teams.map((team) => [team.name.toLowerCase(), team.color]));
   const feedEvents = (snapshot?.events ?? []).map((event) => ({
@@ -100,10 +101,10 @@ export default function App() {
           <button className="preview-button" onClick={() => setPreviewAlert(true)}><BellRing size={16} /> Preview alert</button>
         </div>
 
-        {connection !== 'live' && <div className={`connection-notice ${connection}`} role="status">
+        {(connection !== 'live' || sourceWarning) && <div className={`connection-notice ${sourceWarning && connection === 'live' ? 'degraded' : connection}`} role="status">
           <Radio size={17} />
-          <div><strong>{connection === 'offline' ? 'Portwatch is unreachable' : 'Waiting for Portwatch data'}</strong><span>{error || 'Live race data will appear here once the feed is connected.'}</span></div>
-          <a href="https://portwatch-vi.xyz/" target="_blank" rel="noreferrer">Open source <ExternalLink size={13} /></a>
+          <div><strong>{sourceWarning && connection === 'live' ? 'Some GitHub data is unavailable' : connection === 'offline' ? 'Portwatch is unreachable' : 'Waiting for Portwatch data'}</strong><span>{sourceWarning && connection === 'live' ? sourceWarning : error || 'Live race data will appear here once the feed is connected.'}</span></div>
+          {!(sourceWarning && connection === 'live') && <a href="https://portwatch-vi.xyz/" target="_blank" rel="noreferrer">Open source <ExternalLink size={13} /></a>}
         </div>}
 
         <div className="primary-grid">
