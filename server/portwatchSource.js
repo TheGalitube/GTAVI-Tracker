@@ -4,25 +4,38 @@ const TRACKER_CACHE_MS = 5 * 60_000;
 const COUNT_CACHE_MS = 5 * 60_000;
 const PR_CACHE_MS = 10_000;
 
-const TEAMS = [
-  { id: 'zettrox', name: 'ZETTROX', color: '#b483ff' },
-  { id: 'victory-gta6', name: 'hyphennn', color: '#ff9b59' },
-  { id: 'vitoriabr', name: 'Uilian', color: '#3edbd0' },
-  { id: 'marvis', name: 'Victory', color: '#5a9cff' },
-  { id: 'xcl', name: 'XCL', color: '#3dd99b' },
-];
-
+const TEAM_COLORS = ['#b483ff', '#ff9b59', '#3edbd0', '#5a9cff', '#3dd99b'];
 const trackerCache = { value: null, expiresAt: 0, promise: null };
-const countsCache = { value: null, expiresAt: 0, promise: null };
-const pullCache = { value: null, expiresAt: 0, promise: null };
+let githubCaches;
 
 export async function getPortwatchSnapshot() {
   const tracker = await cached(trackerCache, TRACKER_CACHE_MS, fetchTracker);
+  const teams = selectTeams(tracker.efforts);
+  const rosterKey = JSON.stringify(teams.map(({ id, name, repo }) => [id, name, repo]).sort());
+  if (githubCaches?.rosterKey !== rosterKey) {
+    githubCaches = { rosterKey, counts: {}, activity: {} };
+  }
+  const { counts: countsCache, activity: pullCache } = githubCaches;
   const [counts, activityByTeam] = await Promise.all([
-    cached(countsCache, COUNT_CACHE_MS, () => fetchTeamCounts(tracker.efforts)),
-    cached(pullCache, PR_CACHE_MS, () => fetchTeamActivity(tracker.efforts)),
+    cached(countsCache, COUNT_CACHE_MS, () => fetchTeamCounts(teams)),
+    cached(pullCache, PR_CACHE_MS, () => fetchTeamActivity(teams, pullCache.value ?? {})),
   ]);
-  return assembleSnapshot(tracker, counts, activityByTeam);
+  return assembleSnapshot(tracker, teams, counts, activityByTeam);
+}
+
+function selectTeams(efforts) {
+  const ranked = efforts
+    .filter((effort) => typeof effort?.id === 'string' && !effort.nuked && validRepo(effort.repo))
+    .map((effort) => ({ ...effort, name: effort.name || effort.id, ...scoreEffort(effort) }))
+    .sort((a, b) => b.progress - a.progress);
+
+  const repos = new Set();
+  return ranked.filter(({ repo }) => {
+    const key = repo.toLowerCase();
+    if (repos.has(key)) return false;
+    repos.add(key);
+    return true;
+  }).slice(0, TEAM_COLORS.length);
 }
 
 async function cached(cache, ttl, load) {
@@ -51,11 +64,8 @@ async function fetchTracker() {
   return data;
 }
 
-async function fetchTeamCounts(efforts) {
-  return Object.fromEntries(await Promise.all(TEAMS.map(async ({ id }) => {
-    const effort = findEffort(efforts, id);
-    const repo = effort?.repo;
-    if (!repo) return [id, emptyCounts()];
+async function fetchTeamCounts(teams) {
+  return Object.fromEntries(await Promise.all(teams.map(async ({ id, repo }) => {
 
     const today = new Date().toISOString().slice(0, 10);
     const queries = [
@@ -72,13 +82,9 @@ async function fetchTeamCounts(efforts) {
   })));
 }
 
-async function fetchTeamActivity(efforts) {
-  const prior = pullCache.value ?? {};
-  return Object.fromEntries(await Promise.all(TEAMS.map(async ({ id, name }) => {
-    const effort = findEffort(efforts, id);
-    const repo = validRepo(effort?.repo);
+async function fetchTeamActivity(teams, prior) {
+  return Object.fromEntries(await Promise.all(teams.map(async ({ id, name, repo }) => {
     const empty = { events: [], pullRequests: [], activity: null, activityHistory: [], activityTruncated: false };
-    if (!repo) return [id, empty];
 
     try {
       const [eventFeed, openPulls] = await Promise.all([
@@ -189,7 +195,7 @@ async function githubSearchCount(query) {
 }
 
 async function fetchJson(url) {
-  const token = process.env.GITHUB_TOKEN?.trim();
+  const token = new URL(url).origin === GITHUB_API ? process.env.GITHUB_TOKEN?.trim() : undefined;
   const response = await fetch(url, {
     headers: {
       Accept: 'application/vnd.github+json',
@@ -203,36 +209,32 @@ async function fetchJson(url) {
   return response.json();
 }
 
-function assembleSnapshot(tracker, counts, activityByTeam) {
-  const efforts = tracker.efforts ?? [];
-  const teams = TEAMS.map(({ id, color }) => {
-    const effort = findEffort(efforts, id);
-    const score = effort ? scoreEffort(effort) : null;
-    const stats = effort?.stats ?? {};
+function assembleSnapshot(tracker, rankedTeams, counts, activityByTeam) {
+  const teams = rankedTeams.map(({ id, name, repo, progress, stage, stats }, index) => {
     const metrics = counts?.[id] ?? emptyCounts();
     return {
       id,
-      name: TEAMS.find((team) => team.id === id)?.name ?? effort?.name ?? id,
-      color,
-      progress: score?.progress ?? null,
-      stage: score?.stage ?? null,
+      name,
+      color: TEAM_COLORS[index],
+      progress,
+      stage,
       openPullRequests: metrics.openPullRequests,
       totalPullRequests: metrics.totalPullRequests,
       mergedToday: metrics.mergedToday,
-      stars: numberOrNull(stats.stars),
+      stars: numberOrNull(stats?.stars),
       activity: activityByTeam?.[id]?.activity ?? null,
       activityHistory: activityByTeam?.[id]?.activityHistory ?? [],
       activityTruncated: Boolean(activityByTeam?.[id]?.activityTruncated),
-      repository: effort?.repo ? `https://github.com/${effort.repo}` : null,
+      repository: `https://github.com/${repo}`,
     };
   });
   const colors = new Map(teams.map((team) => [team.id, team.color]));
-  const events = TEAMS.flatMap(({ id }) => (activityByTeam?.[id]?.events ?? []).map((event) => ({
+  const events = teams.flatMap(({ id }) => (activityByTeam?.[id]?.events ?? []).map((event) => ({
     ...event,
     teamColor: colors.get(id),
     pullRequest: undefined,
   }))).sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-  const pullRequests = TEAMS.flatMap(({ id }) => (activityByTeam?.[id]?.pullRequests ?? []).map((pull) => ({
+  const pullRequests = teams.flatMap(({ id }) => (activityByTeam?.[id]?.pullRequests ?? []).map((pull) => ({
     id: `${pull._repo}#${pull.number}`,
     kind: 'opened',
     number: pull.number,
@@ -255,12 +257,8 @@ function assembleSnapshot(tracker, counts, activityByTeam) {
     teams,
     events,
     pullRequests,
-    sourceWarnings: [...new Set(TEAMS.map(({ id }) => activityByTeam?.[id]?.warning).filter(Boolean))],
+    sourceWarnings: [...new Set(teams.map(({ id }) => activityByTeam?.[id]?.warning).filter(Boolean))],
   };
-}
-
-function findEffort(efforts, id) {
-  return efforts.find((effort) => effort.id === id);
 }
 
 function emptyCounts() {
@@ -268,7 +266,8 @@ function emptyCounts() {
 }
 
 function validRepo(value) {
-  return typeof value === 'string' && /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(value) ? value : null;
+  return typeof value === 'string'
+    && /^[A-Za-z0-9-]+\/(?!\.{1,2}$)[A-Za-z0-9_.-]+$/.test(value);
 }
 
 function settledNumber(result) {
