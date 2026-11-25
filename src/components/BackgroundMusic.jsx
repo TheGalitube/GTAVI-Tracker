@@ -3,6 +3,8 @@ import { Music2, Pause, Play, SkipForward, Trash2 } from 'lucide-react';
 
 const STORAGE_KEY = 'portrace:audio-playlist';
 const VOLUME_KEY = 'portrace:audio-volume';
+const CURRENT_INDEX_KEY = 'portrace:audio-current-index';
+const RESUME_KEY = 'portrace:audio-resume';
 
 function readPlaylist() {
   try {
@@ -22,12 +24,18 @@ function labelFor(url, index) {
   }
 }
 
+function readCurrentIndex() {
+  const saved = Number(localStorage.getItem(CURRENT_INDEX_KEY));
+  return Number.isInteger(saved) && saved >= 0 ? saved : 0;
+}
+
 export default function BackgroundMusic({ ducked = false }) {
   const [urls, setUrls] = useState(readPlaylist);
   const [draft, setDraft] = useState(() => readPlaylist().join('\n'));
   const [localTracks, setLocalTracks] = useState([]);
+  const [localTracksLoaded, setLocalTracksLoaded] = useState(false);
   const [localAudioMessage, setLocalAudioMessage] = useState('');
-  const [currentIndex, setCurrentIndex] = useState(0);
+  const [currentIndex, setCurrentIndex] = useState(readCurrentIndex);
   const [playing, setPlaying] = useState(false);
   const [volume, setVolume] = useState(() => {
     const saved = Number(localStorage.getItem(VOLUME_KEY));
@@ -35,6 +43,8 @@ export default function BackgroundMusic({ ducked = false }) {
   });
   const [message, setMessage] = useState('');
   const audioRef = useRef(null);
+  const settingsRef = useRef(null);
+  const resumeAttempted = useRef(false);
 
   useEffect(() => {
     let stopped = false;
@@ -45,10 +55,16 @@ export default function BackgroundMusic({ ducked = false }) {
         return data;
       })
       .then((data) => {
-        if (!stopped) setLocalTracks(Array.isArray(data.tracks) ? data.tracks : []);
+        if (!stopped) {
+          setLocalTracks(Array.isArray(data.tracks) ? data.tracks : []);
+          setLocalTracksLoaded(true);
+        }
       })
       .catch((error) => {
-        if (!stopped) setLocalAudioMessage(error.message || 'Local music is available when running the app with its Vite server.');
+        if (!stopped) {
+          setLocalAudioMessage(error.message || 'Local music is available when running the app with its Vite server.');
+          setLocalTracksLoaded(true);
+        }
       });
     return () => { stopped = true; };
   }, []);
@@ -80,11 +96,14 @@ export default function BackgroundMusic({ ducked = false }) {
       return;
     }
     const nextIndex = (index + tracks.length) % tracks.length;
+    localStorage.setItem(CURRENT_INDEX_KEY, String(nextIndex));
     if (!tracks[nextIndex].available) {
       setCurrentIndex(nextIndex);
+      localStorage.removeItem(RESUME_KEY);
       setMessage(`Could not read “${tracks[nextIndex].title}” from ./music. Check that it is not locked by another app.`);
       return;
     }
+    localStorage.setItem(RESUME_KEY, 'on');
     setCurrentIndex(nextIndex);
     if (audio.src !== new URL(tracks[nextIndex].src, window.location.href).href) {
       audio.src = tracks[nextIndex].src;
@@ -94,11 +113,32 @@ export default function BackgroundMusic({ ducked = false }) {
       await audio.play();
       setPlaying(true);
       setMessage('');
-    } catch {
+    } catch (error) {
       setPlaying(false);
-      setMessage('This audio source could not be played. Check that it is a supported audio file or stream.');
+      if (error.name === 'NotAllowedError' && settingsRef.current) settingsRef.current.open = true;
+      setMessage(error.name === 'NotAllowedError'
+        ? 'The browser blocked autoplay. Press Play to resume music.'
+        : 'This audio source could not be played. Check that it is a supported audio file or stream.');
     }
   };
+
+  const pauseMusic = () => {
+    audioRef.current?.pause();
+    setPlaying(false);
+    localStorage.removeItem(RESUME_KEY);
+  };
+
+  useEffect(() => {
+    if (!localTracksLoaded || resumeAttempted.current) return;
+    resumeAttempted.current = true;
+    if (localStorage.getItem(RESUME_KEY) !== 'on' || !tracks.length) return;
+    const index = readCurrentIndex();
+    if (index >= tracks.length) {
+      localStorage.removeItem(RESUME_KEY);
+      return;
+    }
+    playTrack(index);
+  }, [localTracksLoaded, tracks.length]);
 
   const savePlaylist = () => {
     const urls = draft.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
@@ -117,6 +157,7 @@ export default function BackgroundMusic({ ducked = false }) {
     }
 
     audioRef.current?.pause();
+    localStorage.removeItem(RESUME_KEY);
     if (audioRef.current) {
       audioRef.current.removeAttribute('src');
       audioRef.current.load();
@@ -125,18 +166,21 @@ export default function BackgroundMusic({ ducked = false }) {
     setUrls(urls);
     setDraft(urls.join('\n'));
     setCurrentIndex(0);
+    localStorage.setItem(CURRENT_INDEX_KEY, '0');
     setPlaying(false);
     setMessage(`${urls.length} direct ${urls.length === 1 ? 'track' : 'tracks'} saved. Press play to start.`);
   };
 
   const clearPlaylist = () => {
     audioRef.current?.pause();
+    localStorage.removeItem(RESUME_KEY);
     audioRef.current?.removeAttribute('src');
     audioRef.current?.load();
     localStorage.removeItem(STORAGE_KEY);
     setUrls([]);
     setDraft('');
     setCurrentIndex(0);
+    localStorage.setItem(CURRENT_INDEX_KEY, '0');
     setPlaying(false);
     setMessage('Direct audio links cleared.');
   };
@@ -144,7 +188,7 @@ export default function BackgroundMusic({ ducked = false }) {
   const currentTrack = tracks[currentIndex];
 
   return (
-    <details className="music-settings">
+    <details className="music-settings" ref={settingsRef}>
       <summary className="preview-button music-settings__trigger"><Music2 size={16} /> Background music <span>{tracks.length ? `${tracks.length} tracks` : 'Set up'}</span></summary>
       <section className="music-settings__panel" aria-label="Background music settings">
         <h2>Audio playlist</h2>
@@ -164,7 +208,7 @@ export default function BackgroundMusic({ ducked = false }) {
         <p className="music-settings__hint">Direct audio links are saved in this browser. YouTube links are not supported.</p>
         <div className="music-settings__actions">
           <button className="music-control music-control--primary" onClick={savePlaylist}>Save playlist</button>
-          <button className="music-control" onClick={() => playing ? audioRef.current?.pause() : playTrack(currentIndex)} disabled={!tracks.length} aria-label={playing ? 'Pause music' : 'Play music'}>
+          <button className="music-control" onClick={() => playing ? pauseMusic() : playTrack(currentIndex)} disabled={!tracks.length} aria-label={playing ? 'Pause music' : 'Play music'}>
             {playing ? <Pause size={15} /> : <Play size={15} />}{playing ? 'Pause' : 'Play'}
           </button>
           <button className="music-control" onClick={() => playTrack(currentIndex + 1)} disabled={tracks.length < 2} aria-label="Play next track"><SkipForward size={15} />Next</button>
@@ -177,7 +221,7 @@ export default function BackgroundMusic({ ducked = false }) {
         </div>
         {currentTrack && <p className="music-settings__track" title={currentTrack.title}>{playing ? 'Now playing' : 'Selected'}: {currentTrack.title}</p>}
         {message && <p className="music-settings__message" role="status">{message}</p>}
-        <audio ref={audioRef} hidden preload="none" onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)} onEnded={() => tracks.length > 1 ? playTrack(currentIndex + 1) : setPlaying(false)} onError={() => { setPlaying(false); setMessage('Could not load this audio URL. It may be unavailable or not a direct audio stream.'); }} />
+        <audio ref={audioRef} hidden preload="none" onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)} onEnded={() => tracks.length > 1 ? playTrack(currentIndex + 1) : pauseMusic()} onError={() => { setPlaying(false); setMessage('Could not load this audio URL. It may be unavailable or not a direct audio stream.'); }} />
       </section>
     </details>
   );
