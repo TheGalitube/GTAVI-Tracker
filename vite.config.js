@@ -37,6 +37,7 @@ export default defineConfig(({ mode }) => {
     esbuild: { jsx: 'automatic' },
     server: {
       host: '0.0.0.0',
+      allowedHosts: ['hosting.galitube.de'],
       watch: {
         ignored: [
           '**/node_modules/**',
@@ -48,6 +49,6 @@ export default defineConfig(({ mode }) => {
         ],
       },
     },
-    preview: { host: '0.0.0.0' },
+    preview: { host: '0.0.0.0', allowedHosts: ['hosting.galitube.de'] },
   };
 });
