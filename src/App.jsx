@@ -1,6 +1,7 @@
 import { useCallback, useRef, useState } from 'react';
-import { BellRing, ChevronDown, ExternalLink, Github, Radio, Volume2, VolumeX } from 'lucide-react';
+import { BellRing, ChevronDown, ExternalLink, Radio, Volume2, VolumeX } from 'lucide-react';
 import RaceProgress from './components/RaceProgress.jsx';
+import CurrentPullRequest from './components/CurrentPullRequest.jsx';
 import LiveFeed from './components/LiveFeed.jsx';
 import TeamTable from './components/TeamTable.jsx';
 import TransientPRAlert from './components/TransientPRAlert.jsx';
@@ -58,7 +59,7 @@ export default function App() {
     ...event,
     teamColor: teamColors.get(event.team.toLowerCase()),
   }));
-  const currentPullRequest = snapshot?.pullRequests?.find((event) => event.kind === 'opened') ?? null;
+  const openPullRequests = (snapshot?.pullRequests ?? []).filter((event) => event.kind === 'opened');
   const activeAlert = previewAlert ? previewEvent : alerts[0] ?? null;
 
   const changeSound = (enabled) => {
@@ -118,13 +119,7 @@ export default function App() {
           <div className="race-column" id="race">
             <div className="section-heading"><div><span className="section-kicker">RACE TO PLAYABLE</span><ChevronDown size={15} /></div><span>{teams.length ? `${teams.length} teams` : 'No team data'}</span></div>
             <RaceProgress teams={teams} />
-            <section className="current-pr" aria-label="Current pull request">
-              <span className="current-label">CURRENT PULL REQUEST</span>
-              {currentPullRequest ? <>
-                <a className="current-title" href={currentPullRequest.url || undefined} target={currentPullRequest.url ? '_blank' : undefined} rel="noreferrer"><Github size={23} /><strong>#{currentPullRequest.number}</strong><span>{currentPullRequest.title}</span></a>
-                <div className="current-meta"><span className="team-pill">{currentPullRequest.team}</span><span>{currentPullRequest.author}</span><span className="change additions">+{currentPullRequest.additions ?? '—'}</span><span className="change deletions">−{currentPullRequest.deletions ?? '—'}</span><span>{currentPullRequest.files ?? '—'} files</span><span>{currentPullRequest.commits ?? '—'} commits</span></div>
-              </> : <div className="current-empty">The latest active pull request will appear here.</div>}
-            </section>
+            <CurrentPullRequest key={JSON.stringify(openPullRequests.map(({ id }) => id))} pullRequests={openPullRequests} />
           </div>
           <div id="pull-requests"><LiveFeed events={feedEvents} /></div>
         </div>
