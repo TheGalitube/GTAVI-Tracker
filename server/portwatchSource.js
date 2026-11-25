@@ -234,6 +234,7 @@ function assembleSnapshot(tracker, counts, activityByTeam) {
     number: pull.number,
     title: pull.title,
     team: pull._team,
+    teamColor: colors.get(id),
     author: pull.user?.login ?? 'Contributor',
     additions: numberOrNull(pull.additions),
     deletions: numberOrNull(pull.deletions),

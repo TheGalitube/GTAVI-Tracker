@@ -3,7 +3,7 @@ import { BellRing, ChevronDown, ExternalLink, Github, Radio, Volume2, VolumeX } 
 import RaceProgress from './components/RaceProgress.jsx';
 import LiveFeed from './components/LiveFeed.jsx';
 import TeamTable from './components/TeamTable.jsx';
-import AlertDialog from './components/AlertDialog.jsx';
+import TransientPRAlert from './components/TransientPRAlert.jsx';
 import { usePortwatch } from './hooks/usePortwatch.js';
 
 const previewEvent = {
@@ -85,6 +85,9 @@ export default function App() {
         <div className="topbar-status">
           <span className={`live-indicator ${connection}`}><i />{connection === 'live' ? 'LIVE' : connection === 'offline' ? 'OFFLINE' : 'WAITING'}</span>
           <span className="updated-at">{snapshot?.updatedAt ? `Updated ${formatUpdated(snapshot.updatedAt)}` : 'Awaiting source'}</span>
+          <button className="sound-quick" onClick={() => { const muted = !muteFutureAlerts; setMuteFutureAlerts(muted); localStorage.setItem('portrace:mute-alerts', muted ? 'on' : 'off'); }} aria-label={muteFutureAlerts ? 'Enable alerts' : 'Mute future alerts'} aria-pressed={muteFutureAlerts}>
+            <BellRing size={17} />
+          </button>
           <button className="sound-quick" onClick={() => changeSound(!soundEnabled)} aria-label={soundEnabled ? 'Turn sound off' : 'Turn sound on'} aria-pressed={soundEnabled}>
             {soundEnabled ? <Volume2 size={17} /> : <VolumeX size={17} />}
           </button>
@@ -126,7 +129,7 @@ export default function App() {
         <footer className="source-line"><span>Race data: <a href="https://portwatch-vi.xyz/" target="_blank" rel="noreferrer">portwatch-vi.xyz</a></span><span>Refreshes every 30 seconds</span></footer>
       </main>
 
-      <AlertDialog event={activeAlert} preview={previewAlert} soundEnabled={soundEnabled} muteFutureAlerts={muteFutureAlerts} onSoundChange={changeSound} onMuteFutureChange={(value) => { setMuteFutureAlerts(value); localStorage.setItem('portrace:mute-alerts', value ? 'on' : 'off'); }} onDismiss={dismissAlert} />
+      <TransientPRAlert key={`${activeAlert?.id ?? 'none'}-${activeAlert?.kind ?? ''}`} event={activeAlert} onDismiss={dismissAlert} />
     </div>
   );
 }
