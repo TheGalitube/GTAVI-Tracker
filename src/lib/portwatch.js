@@ -29,11 +29,18 @@ function normalizeSnapshot(payload) {
       ? payload.pull_requests
       : [];
 
+  const normalizedTeams = teams.map(normalizeTeam);
+  const teamColors = new Map(normalizedTeams.map((team) => [team.name.toLowerCase(), team.color]));
+  const normalizedEvents = events.map(normalizeEvent).map((event) => ({
+    ...event,
+    teamColor: event.teamColor ?? teamColors.get(event.team.toLowerCase()),
+  }));
+
   return {
     state: 'connected',
     updatedAt: payload.updatedAt || payload.updated_at || new Date().toISOString(),
-    teams: teams.map(normalizeTeam),
-    events: events.map(normalizeEvent),
+    teams: normalizedTeams,
+    events: normalizedEvents,
     pullRequests: pullRequests.map(normalizePullRequest),
   };
 }
@@ -74,7 +81,9 @@ function normalizeEvent(event, index) {
     number: finiteNumber(event.number ?? event.pull_request_number),
     title: String(event.title ?? event.pull_request?.title ?? 'Pull request update'),
     team: String(event.team ?? event.repository_owner ?? event.author_association ?? 'Unknown team'),
+    teamColor: event.teamColor ?? event.team_color ?? null,
     author: String(event.author ?? event.user?.login ?? event.login ?? 'Contributor'),
+    avatarUrl: event.avatarUrl ?? event.author_avatar_url ?? event.user?.avatar_url ?? event.user?.avatarUrl ?? null,
     additions: finiteNumber(event.additions),
     deletions: finiteNumber(event.deletions),
     files: finiteNumber(event.changed_files ?? event.files),
