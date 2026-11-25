@@ -26,7 +26,7 @@ The dashboard reads public GitHub pull request data. Without authentication, Git
 3. Set `GITHUB_TOKEN` to the token in `.env.local`:
 
    ```text
-   GITHUB_TOKEN=github_pat_your_token_here
+   GITHUB_TOKEN=your_token_here
    ```
 
 4. Save the file and restart `npm run dev`.
