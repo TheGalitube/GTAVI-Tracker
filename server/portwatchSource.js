@@ -169,6 +169,7 @@ function normalizePullEvent(event, details, team, teamId, repo) {
     team,
     teamId,
     author: pull.user?.login ?? event.actor?.login ?? 'Contributor',
+    avatarUrl: pull.user?.avatar_url ?? event.actor?.avatar_url ?? null,
     additions: numberOrNull(pull.additions),
     deletions: numberOrNull(pull.deletions),
     files: numberOrNull(pull.changed_files),

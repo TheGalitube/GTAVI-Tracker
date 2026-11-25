@@ -75,6 +75,7 @@ function normalizeEvent(event, index) {
     title: String(event.title ?? event.pull_request?.title ?? 'Pull request update'),
     team: String(event.team ?? event.repository_owner ?? event.author_association ?? 'Unknown team'),
     author: String(event.author ?? event.user?.login ?? event.login ?? 'Contributor'),
+    avatarUrl: event.avatarUrl ?? event.user?.avatar_url ?? event.actor?.avatar_url ?? null,
     additions: finiteNumber(event.additions),
     deletions: finiteNumber(event.deletions),
     files: finiteNumber(event.changed_files ?? event.files),

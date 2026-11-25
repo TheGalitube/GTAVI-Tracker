@@ -17,6 +17,7 @@ const accents = {
 
 export default function TransientPRAlert({ event, onDismiss }) {
   const [leaving, setLeaving] = useState(false);
+  const [avatarFailed, setAvatarFailed] = useState(false);
 
   useEffect(() => {
     if (!event) return undefined;
@@ -53,17 +54,47 @@ export default function TransientPRAlert({ event, onDismiss }) {
           <p>{event.title || 'Pull request update'}</p>
         </div>
         <div className="transient-alert__meta">
-          {event.avatarUrl ? (
-            <img className="transient-alert__avatar" src={event.avatarUrl} alt="" />
+          {event.avatarUrl && !avatarFailed ? (
+            <img className="transient-alert__avatar" src={event.avatarUrl} alt="" referrerPolicy="no-referrer" onError={() => setAvatarFailed(true)} />
           ) : (
             <span className="transient-alert__avatar transient-alert__avatar--initial">{authorInitial}</span>
           )}
           <strong className="transient-alert__author">{event.author || 'Contributor'}</strong>
-          <span className="transient-alert__additions">+{event.additions ?? '—'}</span>
-          <span className="transient-alert__deletions">−{event.deletions ?? '—'}</span>
+          <AnimatedCount className="transient-alert__additions" value={event.additions} prefix="+" />
+          <AnimatedCount className="transient-alert__deletions" value={event.deletions} prefix="−" />
           <span className="transient-alert__files">{event.files ?? '—'} files</span>
         </div>
       </div>
     </div>
   );
+}
+
+function AnimatedCount({ value, prefix, className }) {
+  const target = value == null || !Number.isFinite(Number(value)) ? null : Math.max(0, Number(value));
+  const [count, setCount] = useState(() => target == null ? null : 0);
+
+  useEffect(() => {
+    if (target == null) {
+      setCount(null);
+      return undefined;
+    }
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
+      setCount(Math.round(target));
+      return undefined;
+    }
+
+    let start;
+    let frame;
+    const animate = (now) => {
+      start ??= now;
+      const progress = Math.min((now - start) / 900, 1);
+      const eased = 1 - (1 - progress) ** 3;
+      setCount(Math.round(target * eased));
+      if (progress < 1) frame = window.requestAnimationFrame(animate);
+    };
+    frame = window.requestAnimationFrame(animate);
+    return () => window.cancelAnimationFrame(frame);
+  }, [target]);
+
+  return <span className={className}>{prefix}{count == null ? '—' : count.toLocaleString()}</span>;
 }
