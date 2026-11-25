@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { defineConfig, loadEnv } from 'vite';
 import { audioMiddleware } from './server/audioFiles.js';
 import { getPortwatchSnapshot } from './server/portwatchSource.js';
@@ -18,6 +19,12 @@ async function portwatchMiddleware(req, res, next) {
 
 function portwatchPlugin() {
   const attach = (server) => {
+    const instance = randomUUID();
+    server.middlewares.use('/api/server-instance', (_req, res) => {
+      res.setHeader('Cache-Control', 'no-store');
+      res.setHeader('Content-Type', 'application/json');
+      res.end(JSON.stringify(instance));
+    });
     server.middlewares.use(audioMiddleware);
     server.middlewares.use(portwatchMiddleware);
   };

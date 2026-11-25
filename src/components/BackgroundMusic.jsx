@@ -5,6 +5,21 @@ const STORAGE_KEY = 'portrace:audio-playlist';
 const VOLUME_KEY = 'portrace:audio-volume';
 const CURRENT_INDEX_KEY = 'portrace:audio-current-index';
 const RESUME_KEY = 'portrace:audio-resume';
+const PLAYBACK_KEY = 'portrace:audio-playback-v1';
+
+function readPlayback() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(PLAYBACK_KEY));
+    if (typeof saved?.track !== 'string') return null;
+    return {
+      track: saved.track,
+      position: Number.isFinite(saved.position) && saved.position >= 0 ? saved.position : 0,
+      resume: saved.resume === true,
+    };
+  } catch {
+    return null;
+  }
+}
 
 function readPlaylist() {
   try {
@@ -38,13 +53,37 @@ export default function BackgroundMusic({ ducked = false }) {
   const [currentIndex, setCurrentIndex] = useState(readCurrentIndex);
   const [playing, setPlaying] = useState(false);
   const [volume, setVolume] = useState(() => {
-    const saved = Number(localStorage.getItem(VOLUME_KEY));
+    const saved = Number(localStorage.getItem(VOLUME_KEY) ?? 0.35);
     return Number.isFinite(saved) && saved >= 0 && saved <= 1 ? saved : 0.35;
   });
   const [message, setMessage] = useState('');
   const audioRef = useRef(null);
   const settingsRef = useRef(null);
   const resumeAttempted = useRef(false);
+  const playbackRef = useRef(null);
+
+  const savePlayback = () => {
+    const playback = playbackRef.current;
+    if (!playback) return;
+    const audio = audioRef.current;
+    if (audio?.readyState && Number.isFinite(audio.duration)) {
+      playback.position = audio.currentTime;
+    }
+    const serialized = JSON.stringify(playback);
+    if (localStorage.getItem(PLAYBACK_KEY) !== serialized) {
+      localStorage.setItem(PLAYBACK_KEY, serialized);
+    }
+  };
+
+  useEffect(() => {
+    window.addEventListener('pagehide', savePlayback);
+    // Checkpoint while the page remains open, including while the server is offline.
+    const timer = window.setInterval(savePlayback, 1000);
+    return () => {
+      window.removeEventListener('pagehide', savePlayback);
+      window.clearInterval(timer);
+    };
+  }, []);
 
   useEffect(() => {
     let stopped = false;
@@ -76,44 +115,57 @@ export default function BackgroundMusic({ ducked = false }) {
 
   const tracks = [
     ...localTracks.map((track) => ({
-      id: `local-${track.id}`,
+      key: `local:${track.title}`,
       title: track.title,
       src: `/api/audio/${track.id}`,
       available: track.available,
     })),
     ...urls.map((url, index) => ({
-      id: `url-${index}`,
+      key: `url:${url}`,
       title: labelFor(url, index),
       src: url,
       available: true,
     })),
   ];
 
-  const playTrack = async (index) => {
+  const playTrack = async (index, position = 0) => {
     const audio = audioRef.current;
     if (!audio || !tracks.length) {
       setMessage('Add audio files to ./music or enter a direct audio URL.');
       return;
     }
     const nextIndex = (index + tracks.length) % tracks.length;
-    localStorage.setItem(CURRENT_INDEX_KEY, String(nextIndex));
-    if (!tracks[nextIndex].available) {
-      setCurrentIndex(nextIndex);
-      localStorage.removeItem(RESUME_KEY);
-      setMessage(`Could not read “${tracks[nextIndex].title}” from ./music. Check that it is not locked by another app.`);
+    const track = tracks[nextIndex];
+    if (!track.available) {
+      setMessage(`Could not read “${track.title}” from ./music. Check that it is not locked by another app.`);
       return;
     }
-    localStorage.setItem(RESUME_KEY, 'on');
+
+    resumeAttempted.current = true;
     setCurrentIndex(nextIndex);
-    if (audio.src !== new URL(tracks[nextIndex].src, window.location.href).href) {
-      audio.src = tracks[nextIndex].src;
+    const playback = { track: track.key, position, resume: true };
+    playbackRef.current = playback;
+    localStorage.setItem(PLAYBACK_KEY, JSON.stringify(playback));
+    localStorage.removeItem(CURRENT_INDEX_KEY);
+    localStorage.removeItem(RESUME_KEY);
+
+    if (audio.src !== new URL(track.src, window.location.href).href) {
+      audio.src = track.src;
       audio.load();
+    }
+    // Before metadata arrives, currentTime sets the media element's initial seek.
+    if (audio.readyState && Number.isFinite(audio.duration)) {
+      audio.currentTime = position < audio.duration ? position : 0;
+    } else if (!audio.readyState) {
+      audio.currentTime = position;
     }
     try {
       await audio.play();
+      if (playbackRef.current !== playback || !playback.resume) return;
       setPlaying(true);
       setMessage('');
     } catch (error) {
+      if (playbackRef.current !== playback || !playback.resume) return;
       setPlaying(false);
       if (error.name === 'NotAllowedError' && settingsRef.current) settingsRef.current.open = true;
       setMessage(error.name === 'NotAllowedError'
@@ -125,20 +177,39 @@ export default function BackgroundMusic({ ducked = false }) {
   const pauseMusic = () => {
     audioRef.current?.pause();
     setPlaying(false);
-    localStorage.removeItem(RESUME_KEY);
+    if (playbackRef.current) {
+      playbackRef.current.resume = false;
+      savePlayback();
+    }
   };
 
   useEffect(() => {
     if (!localTracksLoaded || resumeAttempted.current) return;
     resumeAttempted.current = true;
-    if (localStorage.getItem(RESUME_KEY) !== 'on' || !tracks.length) return;
-    const index = readCurrentIndex();
-    if (index >= tracks.length) {
-      localStorage.removeItem(RESUME_KEY);
-      return;
+    const saved = readPlayback();
+    const index = saved
+      ? tracks.findIndex((track) => track.key === saved.track && track.available)
+      : readCurrentIndex();
+    if (!tracks[index]?.available) return;
+    setCurrentIndex(index);
+    if (saved?.resume || (!saved && localStorage.getItem(RESUME_KEY) === 'on')) {
+      playTrack(index, saved?.position);
+    } else {
+      playbackRef.current = saved;
     }
-    playTrack(index);
   }, [localTracksLoaded, tracks.length]);
+
+  const resetPlayback = () => {
+    audioRef.current?.pause();
+    audioRef.current?.removeAttribute('src');
+    audioRef.current?.load();
+    playbackRef.current = null;
+    localStorage.removeItem(PLAYBACK_KEY);
+    localStorage.removeItem(RESUME_KEY);
+    localStorage.removeItem(CURRENT_INDEX_KEY);
+    setCurrentIndex(0);
+    setPlaying(false);
+  };
 
   const savePlaylist = () => {
     const urls = draft.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
@@ -156,36 +227,35 @@ export default function BackgroundMusic({ ducked = false }) {
       }
     }
 
-    audioRef.current?.pause();
-    localStorage.removeItem(RESUME_KEY);
-    if (audioRef.current) {
-      audioRef.current.removeAttribute('src');
-      audioRef.current.load();
-    }
+    resetPlayback();
     localStorage.setItem(STORAGE_KEY, JSON.stringify(urls));
     setUrls(urls);
     setDraft(urls.join('\n'));
-    setCurrentIndex(0);
-    localStorage.setItem(CURRENT_INDEX_KEY, '0');
-    setPlaying(false);
     setMessage(`${urls.length} direct ${urls.length === 1 ? 'track' : 'tracks'} saved. Press play to start.`);
   };
 
   const clearPlaylist = () => {
-    audioRef.current?.pause();
-    localStorage.removeItem(RESUME_KEY);
-    audioRef.current?.removeAttribute('src');
-    audioRef.current?.load();
+    resetPlayback();
     localStorage.removeItem(STORAGE_KEY);
     setUrls([]);
     setDraft('');
-    setCurrentIndex(0);
-    localStorage.setItem(CURRENT_INDEX_KEY, '0');
-    setPlaying(false);
     setMessage('Direct audio links cleared.');
   };
 
   const currentTrack = tracks[currentIndex];
+  const playCurrent = () => {
+    const saved = playbackRef.current;
+    playTrack(currentIndex, saved?.track === currentTrack?.key ? saved?.position : 0);
+  };
+
+  const finishTrack = () => {
+    if (tracks.length > 1) {
+      playTrack(currentIndex + 1);
+    } else {
+      audioRef.current.currentTime = 0;
+      pauseMusic();
+    }
+  };
 
   return (
     <details className="music-settings" ref={settingsRef}>
@@ -208,10 +278,10 @@ export default function BackgroundMusic({ ducked = false }) {
         <p className="music-settings__hint">Direct audio links are saved in this browser. YouTube links are not supported.</p>
         <div className="music-settings__actions">
           <button className="music-control music-control--primary" onClick={savePlaylist}>Save playlist</button>
-          <button className="music-control" onClick={() => playing ? pauseMusic() : playTrack(currentIndex)} disabled={!tracks.length} aria-label={playing ? 'Pause music' : 'Play music'}>
+          <button className="music-control" onClick={() => playing ? pauseMusic() : playCurrent()} disabled={!localTracksLoaded || !tracks.length} aria-label={playing ? 'Pause music' : 'Play music'}>
             {playing ? <Pause size={15} /> : <Play size={15} />}{playing ? 'Pause' : 'Play'}
           </button>
-          <button className="music-control" onClick={() => playTrack(currentIndex + 1)} disabled={tracks.length < 2} aria-label="Play next track"><SkipForward size={15} />Next</button>
+          <button className="music-control" onClick={() => playTrack(currentIndex + 1)} disabled={!localTracksLoaded || tracks.length < 2} aria-label="Play next track"><SkipForward size={15} />Next</button>
           <button className="music-control music-control--icon" onClick={clearPlaylist} disabled={!urls.length} aria-label="Clear direct audio links" title="Clear direct audio links"><Trash2 size={15} /></button>
         </div>
         <div className="music-settings__volume">
@@ -221,7 +291,7 @@ export default function BackgroundMusic({ ducked = false }) {
         </div>
         {currentTrack && <p className="music-settings__track" title={currentTrack.title}>{playing ? 'Now playing' : 'Selected'}: {currentTrack.title}</p>}
         {message && <p className="music-settings__message" role="status">{message}</p>}
-        <audio ref={audioRef} hidden preload="none" onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)} onEnded={() => tracks.length > 1 ? playTrack(currentIndex + 1) : pauseMusic()} onError={() => { setPlaying(false); setMessage('Could not load this audio URL. It may be unavailable or not a direct audio stream.'); }} />
+        <audio ref={audioRef} hidden preload="none" onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)} onEnded={finishTrack} onError={() => { setPlaying(false); setMessage('Could not load this audio URL. It may be unavailable or not a direct audio stream.'); }} />
       </section>
     </details>
   );
