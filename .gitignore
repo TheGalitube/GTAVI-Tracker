@@ -2,5 +2,4 @@ node_modules/
 dist/
 .env.local
 .env.*.local
-music.config.json
-local-audio/
+music/

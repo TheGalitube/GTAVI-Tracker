@@ -26,7 +26,7 @@ export default function BackgroundMusic() {
   const [urls, setUrls] = useState(readPlaylist);
   const [draft, setDraft] = useState(() => readPlaylist().join('\n'));
   const [localTracks, setLocalTracks] = useState([]);
-  const [localConfigMessage, setLocalConfigMessage] = useState('');
+  const [localAudioMessage, setLocalAudioMessage] = useState('');
   const [currentIndex, setCurrentIndex] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [volume, setVolume] = useState(() => {
@@ -41,14 +41,14 @@ export default function BackgroundMusic() {
     fetch('/api/audio/tracks')
       .then(async (response) => {
         const data = await response.json();
-        if (!response.ok) throw new Error(data.message || 'Could not read local music configuration.');
+        if (!response.ok) throw new Error(data.message || 'Could not scan the local music folder.');
         return data;
       })
       .then((data) => {
         if (!stopped) setLocalTracks(Array.isArray(data.tracks) ? data.tracks : []);
       })
       .catch((error) => {
-        if (!stopped) setLocalConfigMessage(error.message || 'Local file paths are available when running the app with its Vite server.');
+        if (!stopped) setLocalAudioMessage(error.message || 'Local music is available when running the app with its Vite server.');
       });
     return () => { stopped = true; };
   }, []);
@@ -76,13 +76,13 @@ export default function BackgroundMusic() {
   const playTrack = async (index) => {
     const audio = audioRef.current;
     if (!audio || !tracks.length) {
-      setMessage('Add at least one audio URL first.');
+      setMessage('Add audio files to ./music or enter a direct audio URL.');
       return;
     }
     const nextIndex = (index + tracks.length) % tracks.length;
     if (!tracks[nextIndex].available) {
       setCurrentIndex(nextIndex);
-      setMessage(`The configured file “${tracks[nextIndex].title}” was not found. Check its path in music.config.json.`);
+      setMessage(`Could not read “${tracks[nextIndex].title}” from ./music. Check that it is not locked by another app.`);
       return;
     }
     setCurrentIndex(nextIndex);
@@ -148,10 +148,10 @@ export default function BackgroundMusic() {
       <summary className="preview-button music-settings__trigger"><Music2 size={16} /> Background music <span>{tracks.length ? `${tracks.length} tracks` : 'Set up'}</span></summary>
       <section className="music-settings__panel" aria-label="Background music settings">
         <h2>Audio playlist</h2>
-        <p className="music-settings__hint">Local files are read from <code>music.config.json</code> in the project folder. Copy <code>music.config.example.json</code> and set each file path there.</p>
+        <p className="music-settings__hint">Put audio files in <code>./music</code>. The local server scans that folder automatically; refresh this page after adding or removing files.</p>
         {localTracks.length > 0 && <p className="music-settings__track">{localTracks.filter((track) => track.available).length} local {localTracks.filter((track) => track.available).length === 1 ? 'track' : 'tracks'} configured</p>}
-        {localConfigMessage && <p className="music-settings__message" role="status">{localConfigMessage}</p>}
-        {localTracks.some((track) => !track.available) && <p className="music-settings__message" role="status">One or more configured files could not be found. Check the paths in music.config.json.</p>}
+        {localAudioMessage && <p className="music-settings__message" role="status">{localAudioMessage}</p>}
+        {localTracks.some((track) => !track.available) && <p className="music-settings__message" role="status">One or more audio files could not be read. Check that they are supported and not locked by another app.</p>}
         <label htmlFor="audio-playlist">Extra direct audio URLs, one per line</label>
         <textarea
           id="audio-playlist"

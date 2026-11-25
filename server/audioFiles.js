@@ -1,10 +1,10 @@
-import { createReadStream, existsSync, readFileSync } from 'node:fs';
-import { stat } from 'node:fs/promises';
+import { createReadStream } from 'node:fs';
+import { readdir, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const PROJECT_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const CONFIG_PATH = path.join(PROJECT_ROOT, 'music.config.json');
+const MUSIC_DIR = path.join(PROJECT_ROOT, 'music');
 const CONTENT_TYPES = {
   '.aac': 'audio/aac',
   '.flac': 'audio/flac',
@@ -18,21 +18,18 @@ const CONTENT_TYPES = {
   '.webm': 'audio/webm',
 };
 
-function configuredTracks() {
-  if (!existsSync(CONFIG_PATH)) return [];
-  const config = JSON.parse(readFileSync(CONFIG_PATH, 'utf8'));
-  if (!Array.isArray(config.tracks)) throw new Error('music.config.json must contain a "tracks" array.');
-  return config.tracks.map((entry, id) => {
-    const track = typeof entry === 'string' ? { path: entry } : entry;
-    if (!track || typeof track.path !== 'string' || !track.path.trim()) return null;
-    return {
-      id: String(id),
-      title: typeof track.title === 'string' && track.title.trim()
-        ? track.title.trim()
-        : path.basename(track.path),
-      filePath: path.resolve(PROJECT_ROOT, track.path),
-    };
-  }).filter(Boolean);
+async function localTracks() {
+  let files;
+  try {
+    files = await readdir(MUSIC_DIR, { withFileTypes: true });
+  } catch (error) {
+    if (error.code === 'ENOENT') return [];
+    throw error;
+  }
+  return files
+    .filter((file) => file.isFile() && CONTENT_TYPES[path.extname(file.name).toLowerCase()])
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .map((file, id) => ({ id: String(id), title: file.name, filePath: path.join(MUSIC_DIR, file.name) }));
 }
 
 export async function audioMiddleware(req, res, next) {
@@ -41,7 +38,7 @@ export async function audioMiddleware(req, res, next) {
     res.setHeader('Cache-Control', 'no-store');
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
     try {
-      const tracks = await Promise.all(configuredTracks().map(async ({ id, title, filePath }) => {
+      const tracks = await Promise.all((await localTracks()).map(async ({ id, title, filePath }) => {
         try {
           const info = await stat(filePath);
           return info.isFile() && info.size > 0 ? { id, title, available: true } : { id, title, available: false };
@@ -53,7 +50,7 @@ export async function audioMiddleware(req, res, next) {
       res.end(JSON.stringify({ tracks }));
     } catch (error) {
       res.statusCode = 500;
-      res.end(JSON.stringify({ message: error.message || 'Could not read music.config.json.' }));
+      res.end(JSON.stringify({ message: error.message || 'Could not scan the local music folder.' }));
     }
     return;
   }
@@ -64,7 +61,7 @@ export async function audioMiddleware(req, res, next) {
   res.setHeader('Cache-Control', 'no-store');
   res.setHeader('Accept-Ranges', 'bytes');
   try {
-    const track = configuredTracks().find((candidate) => candidate.id === match[1]);
+    const track = (await localTracks()).find((candidate) => candidate.id === match[1]);
     if (!track) {
       res.statusCode = 404;
       res.end('Audio track not found.');

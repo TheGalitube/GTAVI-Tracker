@@ -35,7 +35,19 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [portwatchPlugin()],
     esbuild: { jsx: 'automatic' },
-    server: { host: '0.0.0.0' },
+    server: {
+      host: '0.0.0.0',
+      watch: {
+        ignored: [
+          '**/node_modules/**',
+          '**/.git/**',
+          '**/dist/**',
+          '**/music/**',
+          '**/local-audio/**',
+          '**/*.{aac,flac,m4a,mp3,oga,ogg,opus,wav,weba,webm}',
+        ],
+      },
+    },
     preview: { host: '0.0.0.0' },
   };
 });
