@@ -4,6 +4,7 @@ import RaceProgress from './components/RaceProgress.jsx';
 import LiveFeed from './components/LiveFeed.jsx';
 import TeamTable from './components/TeamTable.jsx';
 import TransientPRAlert from './components/TransientPRAlert.jsx';
+import BackgroundMusic from './components/BackgroundMusic.jsx';
 import { usePortwatch } from './hooks/usePortwatch.js';
 
 const previewEvent = {
@@ -101,7 +102,10 @@ export default function App() {
             <h1>Five contenders. One finish line.</h1>
             <p className="intro-subtitle">Live progress toward GTA VI running on PC.</p>
           </div>
-          <button className="preview-button" onClick={() => setPreviewAlert(true)}><BellRing size={16} /> Preview alert</button>
+          <div className="intro-actions">
+            <BackgroundMusic />
+            <button className="preview-button" onClick={() => setPreviewAlert(true)}><BellRing size={16} /> Preview alert</button>
+          </div>
         </div>
 
         {(connection !== 'live' || sourceWarning) && <div className={`connection-notice ${sourceWarning && connection === 'live' ? 'degraded' : connection}`} role="status">
