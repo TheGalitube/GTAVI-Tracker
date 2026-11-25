@@ -98,10 +98,22 @@ function finiteNumber(value) {
 
 export function findNewEvents(previous, next) {
   if (!previous) return [];
-  const oldEvents = new Map((previous.events ?? []).map((event) => [event.id, event.kind]));
-  return (next.events ?? []).filter((event) => {
-    if (!['opened', 'closed', 'merged'].includes(event.kind)) return false;
-    const priorKind = oldEvents.get(event.id);
-    return priorKind === undefined || priorKind !== event.kind;
-  });
+  const known = new Set();
+  const key = (event) => event.number == null
+    ? `${event.id}:${event.kind}`
+    : `${event.team.toLowerCase()}:${event.number}:${event.kind}`;
+  for (const event of [...(previous.events ?? []), ...(previous.pullRequests ?? [])]) {
+    if (['opened', 'closed', 'merged'].includes(event.kind)) known.add(key(event));
+  }
+
+  const detected = [];
+  const added = new Set();
+  for (const event of [...(next.events ?? []), ...(next.pullRequests ?? [])]) {
+    if (!['opened', 'closed', 'merged'].includes(event.kind)) continue;
+    const eventKey = key(event);
+    if (known.has(eventKey) || added.has(eventKey)) continue;
+    detected.push(event);
+    added.add(eventKey);
+  }
+  return detected;
 }
