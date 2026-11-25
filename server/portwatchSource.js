@@ -84,7 +84,7 @@ async function fetchTeamActivity(efforts) {
     try {
       const [eventFeed, openPulls] = await Promise.all([
         fetchPullEvents(repo),
-        fetchJson(`${GITHUB_API}/repos/${repo}/pulls?state=open&sort=updated&direction=desc&per_page=1`),
+        fetchJson(`${GITHUB_API}/repos/${repo}/pulls?state=open&sort=created&direction=desc&per_page=1`),
       ]);
       if (!Array.isArray(openPulls)) throw new Error(`GitHub returned an invalid open pull request list for ${repo}.`);
 

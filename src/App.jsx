@@ -102,7 +102,10 @@ export default function App() {
             <h1>Five contenders. One finish line.</h1>
             <p className="intro-subtitle">Live progress toward GTA VI running on PC.</p>
           </div>
-          <button className="preview-button" onClick={() => setPreviewAlert(true)}><BellRing size={16} /> Preview alert</button>
+          <div className="intro-actions">
+            {muteFutureAlerts && <span className="muted-alert-note">Future alerts muted</span>}
+            <button className="preview-button" onClick={() => setPreviewAlert(true)}><BellRing size={16} /> Preview alert</button>
+          </div>
         </div>
 
         {connection !== 'live' && <div className={`connection-notice ${connection}`} role="status">

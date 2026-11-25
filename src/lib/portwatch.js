@@ -92,6 +92,7 @@ function normalizeEvent(event, index) {
     deletions: finiteNumber(event.deletions),
     files: finiteNumber(event.changed_files ?? event.files),
     commits: finiteNumber(event.commits),
+    createdAt: event.createdAt ?? event.created_at ?? null,
     timestamp: event.timestamp ?? event.updated_at ?? event.created_at ?? new Date().toISOString(),
     url: event.url ?? event.html_url ?? null,
   };
@@ -112,9 +113,28 @@ function finiteNumber(value) {
 export function findNewEvents(previous, next) {
   if (!previous) return [];
   const oldEvents = new Map((previous.events ?? []).map((event) => [event.id, event.kind]));
-  return (next.events ?? []).filter((event) => {
+  const newEvents = (next.events ?? []).filter((event) => {
     if (!['opened', 'closed', 'merged'].includes(event.kind)) return false;
     const priorKind = oldEvents.get(event.id);
     return priorKind === undefined || priorKind !== event.kind;
   });
+
+  const oldPullRequests = new Set((previous.pullRequests ?? []).map((pullRequest) => pullRequest.id));
+  const eventPullRequests = new Set(newEvents.map(pullRequestKey).filter(Boolean));
+  const previousUpdatedAt = Date.parse(previous.updatedAt);
+  const newlyOpenedPullRequests = (next.pullRequests ?? []).filter((pullRequest) => {
+    if (pullRequest.kind !== 'opened' || oldPullRequests.has(pullRequest.id)) return false;
+    const createdAt = Date.parse(pullRequest.createdAt ?? pullRequest.timestamp);
+    return Number.isFinite(createdAt) && Number.isFinite(previousUpdatedAt) && createdAt >= previousUpdatedAt - 2_000;
+  });
+
+  return [
+    ...newEvents,
+    ...newlyOpenedPullRequests.filter((pullRequest) => !eventPullRequests.has(pullRequestKey(pullRequest))),
+  ];
+}
+
+function pullRequestKey(pullRequest) {
+  if (!pullRequest.number) return null;
+  return `${String(pullRequest.team ?? '').toLowerCase()}#${pullRequest.number}`;
 }

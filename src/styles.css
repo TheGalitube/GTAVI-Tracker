@@ -47,6 +47,8 @@ button:focus-visible, a:focus-visible { outline: 2px solid #ba8cff; outline-offs
 .eyebrow span { color: var(--purple); padding: 0 2px; }
 .intro-copy h1 { margin: 0; font-size: clamp(29px, 3.4vw, 47px); line-height: 1.02; letter-spacing: -.055em; font-weight: 760; }
 .intro-subtitle { margin: 10px 0 0; color: #cad0dc; font-size: 15px; letter-spacing: -.014em; }
+.intro-actions { display: flex; align-items: center; gap: 12px; }
+.muted-alert-note { color: #ffd27b; font-size: 11px; font-weight: 650; }
 .preview-button { height: 39px; flex: 0 0 auto; display: inline-flex; align-items: center; gap: 9px; padding: 0 14px; border: 1px solid rgba(185,146,255,.46); border-radius: 8px; background: rgba(116,73,180,.18); color: #decaff; font-size: 12px; font-weight: 650; cursor: pointer; transition: background .16s ease, border-color .16s ease; }
 .preview-button:hover { background: rgba(116,73,180,.3); border-color: #bd91ff; }
 
