@@ -48,7 +48,15 @@ button:focus-visible, a:focus-visible { outline: 2px solid #ba8cff; outline-offs
 .intro-subtitle { margin: 10px 0 0; color: #cad0dc; font-size: 15px; letter-spacing: -.014em; }
 .preview-button { height: 39px; flex: 0 0 auto; display: inline-flex; align-items: center; gap: 9px; padding: 0 14px; border: 1px solid rgba(185,146,255,.46); border-radius: 8px; background: rgba(116,73,180,.18); color: #decaff; font-size: 12px; font-weight: 650; cursor: pointer; transition: background .16s ease, border-color .16s ease; }
 .preview-button:hover { background: rgba(116,73,180,.3); border-color: #bd91ff; }
-.intro-actions { display: flex; align-items: center; gap: 10px; }
+.intro-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 10px; }
+.music-player { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; max-width: 100%; }
+.now-playing { display: flex; align-items: center; gap: 10px; min-width: 0; width: min(200px, 100%); padding: 8px 11px; border: 1px solid rgba(185,146,255,.38); border-radius: 8px; background: #10131e; color: #decaff; }
+.now-playing > svg { flex: none; }
+.now-playing__text { display: grid; min-width: 0; gap: 2px; }
+.now-playing__text > * { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.now-playing__label { color: #bcb0d3; font-size: 10px; }
+.now-playing__text > strong { color: #f2eff8; font-size: 12px; }
+.now-playing__artist { color: #d3ccdf; font-size: 11px; }
 .music-settings { position: relative; flex: 0 0 auto; }
 .music-settings__trigger { list-style: none; }
 .music-settings__trigger::-webkit-details-marker { display: none; }
@@ -221,8 +229,10 @@ button:focus-visible, a:focus-visible { outline: 2px solid #ba8cff; outline-offs
   .intro-copy h1 { max-width: 550px; font-size: clamp(32px, 8.1vw, 45px); }
   .intro-subtitle { max-width: 360px; font-size: 13px; line-height: 1.5; }
   .preview-button { height: 35px; font-size: 11px; }
-  .intro-actions { flex-wrap: wrap; gap: 8px; }
+  .intro-actions { justify-content: flex-start; gap: 8px; }
   .music-settings__panel { right: auto; left: 0; }
+  .music-player { position: relative; }
+  .music-settings { position: static; }
   .music-settings__trigger > span { font-size: 9px; }
   .connection-notice { align-items: flex-start; flex-wrap: wrap; }
   .connection-notice > div { min-width: calc(100% - 40px); }

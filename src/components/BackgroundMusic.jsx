@@ -52,6 +52,7 @@ export default function BackgroundMusic({ ducked = false }) {
   const [localAudioMessage, setLocalAudioMessage] = useState('');
   const [currentIndex, setCurrentIndex] = useState(readCurrentIndex);
   const [playing, setPlaying] = useState(false);
+  const [metadata, setMetadata] = useState(null);
   const [volume, setVolume] = useState(() => {
     const saved = Number(localStorage.getItem(VOLUME_KEY) ?? 0.35);
     return Number.isFinite(saved) && saved >= 0 && saved <= 1 ? saved : 0.35;
@@ -118,6 +119,7 @@ export default function BackgroundMusic({ ducked = false }) {
       key: `local:${track.title}`,
       title: track.title,
       src: `/api/audio/${track.id}`,
+      metadataUrl: `/api/audio/${track.id}/metadata`,
       available: track.available,
     })),
     ...urls.map((url, index) => ({
@@ -243,6 +245,26 @@ export default function BackgroundMusic({ ducked = false }) {
   };
 
   const currentTrack = tracks[currentIndex];
+  const metadataUrl = playing ? currentTrack?.metadataUrl : undefined;
+
+  useEffect(() => {
+    if (!metadataUrl) return;
+    const controller = new AbortController();
+    fetch(metadataUrl, { signal: controller.signal })
+      .then((response) => response.ok ? response.json() : null)
+      .then((tags) => {
+        if (tags && !controller.signal.aborted) setMetadata({ url: metadataUrl, ...tags });
+      })
+      .catch(() => {
+        // The filename remains visible if the metadata request fails.
+      });
+    return () => controller.abort();
+  }, [metadataUrl]);
+
+  const nowPlaying = playing && currentTrack;
+  const tags = metadata?.url === metadataUrl ? metadata : null;
+  const songTitle = nowPlaying ? tags?.title || currentTrack.title : 'No song playing';
+  const artist = nowPlaying ? tags?.artist : '';
   const playCurrent = () => {
     const saved = playbackRef.current;
     playTrack(currentIndex, saved?.track === currentTrack?.key ? saved?.position : 0);
@@ -258,41 +280,51 @@ export default function BackgroundMusic({ ducked = false }) {
   };
 
   return (
-    <details className="music-settings" ref={settingsRef}>
-      <summary className="preview-button music-settings__trigger"><Music2 size={16} /> Background music <span>{tracks.length ? `${tracks.length} tracks` : 'Set up'}</span></summary>
-      <section className="music-settings__panel" aria-label="Background music settings">
-        <h2>Audio playlist</h2>
-        <p className="music-settings__hint">Put audio files in <code>./music</code>. The local server scans that folder automatically; refresh this page after adding or removing files.</p>
-        {localTracks.length > 0 && <p className="music-settings__track">{localTracks.filter((track) => track.available).length} local {localTracks.filter((track) => track.available).length === 1 ? 'track' : 'tracks'} configured</p>}
-        {localAudioMessage && <p className="music-settings__message" role="status">{localAudioMessage}</p>}
-        {localTracks.some((track) => !track.available) && <p className="music-settings__message" role="status">One or more audio files could not be read. Check that they are supported and not locked by another app.</p>}
-        <label htmlFor="audio-playlist">Extra direct audio URLs, one per line</label>
-        <textarea
-          id="audio-playlist"
-          rows={3}
-          value={draft}
-          onChange={(event) => { setDraft(event.target.value); setMessage(''); }}
-          placeholder={'https://example.com/track-one.mp3\nhttps://example.com/track-two.ogg'}
-          spellCheck="false"
-        />
-        <p className="music-settings__hint">Direct audio links are saved in this browser. YouTube links are not supported.</p>
-        <div className="music-settings__actions">
-          <button className="music-control music-control--primary" onClick={savePlaylist}>Save playlist</button>
-          <button className="music-control" onClick={() => playing ? pauseMusic() : playCurrent()} disabled={!localTracksLoaded || !tracks.length} aria-label={playing ? 'Pause music' : 'Play music'}>
-            {playing ? <Pause size={15} /> : <Play size={15} />}{playing ? 'Pause' : 'Play'}
-          </button>
-          <button className="music-control" onClick={() => playTrack(currentIndex + 1)} disabled={!localTracksLoaded || tracks.length < 2} aria-label="Play next track"><SkipForward size={15} />Next</button>
-          <button className="music-control music-control--icon" onClick={clearPlaylist} disabled={!urls.length} aria-label="Clear direct audio links" title="Clear direct audio links"><Trash2 size={15} /></button>
+    <div className="music-player">
+      <div className="now-playing" role="status" aria-atomic="true">
+        <Music2 size={17} aria-hidden="true" />
+        <div className="now-playing__text">
+          <span className="now-playing__label">Now playing</span>
+          <strong title={songTitle}>{songTitle}</strong>
+          {artist && <span className="now-playing__artist" title={artist}>{artist}</span>}
         </div>
-        <div className="music-settings__volume">
-          <label htmlFor="audio-volume">Volume</label>
-          <input id="audio-volume" type="range" min="0" max="1" step="0.01" value={volume} onChange={(event) => setVolume(Number(event.target.value))} />
-          <span>{Math.round(volume * 100)}%</span>
-        </div>
-        {currentTrack && <p className="music-settings__track" title={currentTrack.title}>{playing ? 'Now playing' : 'Selected'}: {currentTrack.title}</p>}
-        {message && <p className="music-settings__message" role="status">{message}</p>}
-        <audio ref={audioRef} hidden preload="none" onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)} onEnded={finishTrack} onError={() => { setPlaying(false); setMessage('Could not load this audio URL. It may be unavailable or not a direct audio stream.'); }} />
-      </section>
-    </details>
+      </div>
+      <details className="music-settings" ref={settingsRef}>
+        <summary className="preview-button music-settings__trigger"><Music2 size={16} /> Background music <span>{tracks.length ? `${tracks.length} tracks` : 'Set up'}</span></summary>
+        <section className="music-settings__panel" aria-label="Background music settings">
+          <h2>Audio playlist</h2>
+          <p className="music-settings__hint">Put audio files in <code>./music</code>. The local server scans that folder automatically; refresh this page after adding or removing files.</p>
+          {localTracks.length > 0 && <p className="music-settings__track">{localTracks.filter((track) => track.available).length} local {localTracks.filter((track) => track.available).length === 1 ? 'track' : 'tracks'} configured</p>}
+          {localAudioMessage && <p className="music-settings__message" role="status">{localAudioMessage}</p>}
+          {localTracks.some((track) => !track.available) && <p className="music-settings__message" role="status">One or more audio files could not be read. Check that they are supported and not locked by another app.</p>}
+          <label htmlFor="audio-playlist">Extra direct audio URLs, one per line</label>
+          <textarea
+            id="audio-playlist"
+            rows={3}
+            value={draft}
+            onChange={(event) => { setDraft(event.target.value); setMessage(''); }}
+            placeholder={'https://example.com/track-one.mp3\nhttps://example.com/track-two.ogg'}
+            spellCheck="false"
+          />
+          <p className="music-settings__hint">Direct audio links are saved in this browser. YouTube links are not supported.</p>
+          <div className="music-settings__actions">
+            <button className="music-control music-control--primary" onClick={savePlaylist}>Save playlist</button>
+            <button className="music-control" onClick={() => playing ? pauseMusic() : playCurrent()} disabled={!localTracksLoaded || !tracks.length} aria-label={playing ? 'Pause music' : 'Play music'}>
+              {playing ? <Pause size={15} /> : <Play size={15} />}{playing ? 'Pause' : 'Play'}
+            </button>
+            <button className="music-control" onClick={() => playTrack(currentIndex + 1)} disabled={!localTracksLoaded || tracks.length < 2} aria-label="Play next track"><SkipForward size={15} />Next</button>
+            <button className="music-control music-control--icon" onClick={clearPlaylist} disabled={!urls.length} aria-label="Clear direct audio links" title="Clear direct audio links"><Trash2 size={15} /></button>
+          </div>
+          <div className="music-settings__volume">
+            <label htmlFor="audio-volume">Volume</label>
+            <input id="audio-volume" type="range" min="0" max="1" step="0.01" value={volume} onChange={(event) => setVolume(Number(event.target.value))} />
+            <span>{Math.round(volume * 100)}%</span>
+          </div>
+          {currentTrack && <p className="music-settings__track" title={currentTrack.title}>{playing ? 'Now playing' : 'Selected'}: {playing ? songTitle : currentTrack.title}</p>}
+          {message && <p className="music-settings__message" role="status">{message}</p>}
+          <audio ref={audioRef} hidden preload="none" onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)} onEnded={finishTrack} onError={() => { setPlaying(false); setMessage('Could not load this audio URL. It may be unavailable or not a direct audio stream.'); }} />
+        </section>
+      </details>
+    </div>
   );
 }

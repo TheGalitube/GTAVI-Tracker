@@ -2,6 +2,7 @@ import { createReadStream } from 'node:fs';
 import { readdir, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { parseFile } from 'music-metadata';
 
 const PROJECT_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const MUSIC_DIR = path.join(PROJECT_ROOT, 'music');
@@ -55,11 +56,10 @@ export async function audioMiddleware(req, res, next) {
     return;
   }
 
-  const match = pathname.match(/^\/api\/audio\/([0-9]+)$/);
+  const match = pathname.match(/^\/api\/audio\/([0-9]+)(\/metadata)?$/);
   if (!match) return next();
 
   res.setHeader('Cache-Control', 'no-store');
-  res.setHeader('Accept-Ranges', 'bytes');
   try {
     const track = (await localTracks()).find((candidate) => candidate.id === match[1]);
     if (!track) {
@@ -74,6 +74,22 @@ export async function audioMiddleware(req, res, next) {
       return;
     }
 
+    if (match[2]) {
+      let tags;
+      try {
+        ({ common: tags } = await parseFile(track.filePath, { skipCovers: true }));
+      } catch {
+        // Playback can still work for files whose tags cannot be read.
+      }
+      res.setHeader('Content-Type', 'application/json; charset=utf-8');
+      res.end(JSON.stringify({
+        title: tags?.title?.trim() || track.title,
+        artist: tags?.artist?.trim() || '',
+      }));
+      return;
+    }
+
+    res.setHeader('Accept-Ranges', 'bytes');
     const range = req.headers.range;
     let start = 0;
     let end = info.size - 1;
