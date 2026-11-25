@@ -10,7 +10,10 @@ export async function fetchPortwatchSnapshot(signal) {
     const body = await response.json().catch(() => ({}));
     return { state: 'unconfigured', message: body.message };
   }
-  if (!response.ok) throw new Error(`Portwatch returned ${response.status}`);
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    throw new Error(body.message || `Portwatch returned ${response.status}`);
+  }
 
   const payload = await response.json();
   return normalizeSnapshot(payload);
@@ -42,6 +45,7 @@ function normalizeSnapshot(payload) {
     teams: normalizedTeams,
     events: normalizedEvents,
     pullRequests: pullRequests.map(normalizePullRequest),
+    sourceWarnings: Array.isArray(payload.sourceWarnings) ? payload.sourceWarnings.map(String) : [],
   };
 }
 

@@ -87,7 +87,7 @@ export default function App() {
           <a className="selected" href="#top">Dashboard</a><a href="#pull-requests">Pull Requests</a><a href="#teams">Teams</a><a href="#race">Race</a>
         </nav>
         <div className="topbar-status">
-          <span className={`live-indicator ${connection}`}><i />{connection === 'live' ? 'LIVE' : connection === 'offline' ? 'OFFLINE' : 'WAITING'}</span>
+          <span className={`live-indicator ${connection}`}><i />{connection === 'live' ? 'LIVE' : connection === 'degraded' ? 'PARTIAL' : connection === 'offline' ? 'OFFLINE' : 'WAITING'}</span>
           <span className="updated-at">{snapshot?.updatedAt ? `Updated ${formatUpdated(snapshot.updatedAt)}` : 'Awaiting source'}</span>
           <button className="sound-quick" onClick={() => changeSound(!soundEnabled)} aria-label={soundEnabled ? 'Turn sound off' : 'Turn sound on'} aria-pressed={soundEnabled}>
             {soundEnabled ? <Volume2 size={17} /> : <VolumeX size={17} />}
@@ -107,7 +107,7 @@ export default function App() {
 
         {connection !== 'live' && <div className={`connection-notice ${connection}`} role="status">
           <Radio size={17} />
-          <div><strong>{connection === 'offline' ? 'Portwatch is unreachable' : 'Waiting for Portwatch data'}</strong><span>{error || 'Live race data will appear here once the feed is connected.'}</span></div>
+          <div><strong>{connection === 'offline' ? 'Portwatch is unreachable' : connection === 'degraded' ? 'Some GitHub data is unavailable' : 'Waiting for Portwatch data'}</strong><span>{error || 'Live race data will appear here once the feed is connected.'}</span></div>
           <a href="https://portwatch-vi.xyz/" target="_blank" rel="noreferrer">Open source <ExternalLink size={13} /></a>
         </div>}
 

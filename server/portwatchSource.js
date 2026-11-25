@@ -64,10 +64,12 @@ async function fetchTeamCounts(efforts) {
       githubSearchCount(`repo:${repo} is:pr is:merged merged:>=${today}`),
     ];
     const result = await Promise.allSettled(queries);
+    const failure = result.find((entry) => entry.status === 'rejected');
     return [id, {
       openPullRequests: settledNumber(result[0]),
       totalPullRequests: settledNumber(result[1]),
       mergedToday: settledNumber(result[2]),
+      warning: failure ? `GitHub pull request counts for ${id} are unavailable: ${failure.reason?.message || 'the request failed.'}` : null,
     }];
   })));
 }
@@ -77,48 +79,55 @@ async function fetchTeamActivity(efforts) {
   return Object.fromEntries(await Promise.all(TEAMS.map(async ({ id, name }) => {
     const effort = findEffort(efforts, id);
     const repo = validRepo(effort?.repo);
-    if (!repo) return [id, { events: [], pullRequests: [], activity: null, activityHistory: [], activityTruncated: false }];
+    if (!repo) return [id, emptyTeamActivity()];
 
-    const [eventFeed, openPulls] = await Promise.all([
-      fetchPullEvents(repo),
-      fetchJson(`${GITHUB_API}/repos/${repo}/pulls?state=open&sort=updated&direction=desc&per_page=1`),
-    ]);
-    if (!Array.isArray(openPulls)) throw new Error(`GitHub returned an invalid open pull request list for ${repo}.`);
+    try {
+      const [eventFeed, openPulls] = await Promise.all([
+        fetchPullEvents(repo),
+        fetchJson(`${GITHUB_API}/repos/${repo}/pulls?state=open&sort=updated&direction=desc&per_page=1`),
+      ]);
+      if (!Array.isArray(openPulls)) throw new Error(`GitHub returned an invalid open pull request list for ${repo}.`);
 
-    const oldEvents = new Map((prior[id]?.events ?? []).map((event) => [event.id, event.pullRequest]));
-    const currentPullRequest = openPulls[0]
-      ? await fetchJson(`${GITHUB_API}/repos/${repo}/pulls/${openPulls[0].number}`).catch(() => openPulls[0])
-      : null;
-    const lifecycleEvents = eventFeed.events.filter(isPullRequestLifecycleEvent);
-    const displayEvents = await Promise.all(lifecycleEvents.slice(0, 6).map(async (event) => {
-      const number = event.payload?.pull_request?.number;
-      const oldDetails = oldEvents.get(String(event.id));
-      const details = oldDetails ?? (number
-        ? await fetchJson(`${GITHUB_API}/repos/${repo}/pulls/${number}`).catch(() => event.payload?.pull_request ?? {})
-        : {});
-      return normalizePullEvent(event, details, name, id, repo);
-    }));
+      const oldEvents = new Map((prior[id]?.events ?? []).map((event) => [event.id, event.pullRequest]));
+      const currentPullRequest = openPulls[0]
+        ? await fetchJson(`${GITHUB_API}/repos/${repo}/pulls/${openPulls[0].number}`).catch(() => openPulls[0])
+        : null;
+      const lifecycleEvents = eventFeed.events.filter(isPullRequestLifecycleEvent);
+      const displayEvents = await Promise.all(lifecycleEvents.slice(0, 6).map(async (event) => {
+        const number = event.payload?.pull_request?.number;
+        const oldDetails = oldEvents.get(String(event.id));
+        const details = oldDetails ?? (number
+          ? await fetchJson(`${GITHUB_API}/repos/${repo}/pulls/${number}`).catch(() => event.payload?.pull_request ?? {})
+          : {});
+        return normalizePullEvent(event, details, name, id, repo);
+      }));
 
-    const cutoff = Date.now() - 86_400_000;
-    const activityHistory = Array(12).fill(0);
-    for (const event of lifecycleEvents) {
-      const age = Date.now() - Date.parse(event.created_at);
-      if (age < 0 || age >= 86_400_000) continue;
-      const bucket = 11 - Math.floor(age / 7_200_000);
-      activityHistory[bucket] += 1;
+      const cutoff = Date.now() - 86_400_000;
+      const activityHistory = Array(12).fill(0);
+      for (const event of lifecycleEvents) {
+        const age = Date.now() - Date.parse(event.created_at);
+        if (age < 0 || age >= 86_400_000) continue;
+        const bucket = 11 - Math.floor(age / 7_200_000);
+        activityHistory[bucket] += 1;
+      }
+      return [id, {
+        events: displayEvents,
+        pullRequests: currentPullRequest ? [{
+          ...currentPullRequest,
+          _team: name,
+          _teamId: id,
+          _repo: repo,
+        }] : [],
+        activity: lifecycleEvents.filter((event) => Date.parse(event.created_at) >= cutoff).length,
+        activityHistory,
+        activityTruncated: eventFeed.truncated,
+      }];
+    } catch (error) {
+      return [id, {
+        ...(prior[id] ?? emptyTeamActivity()),
+        warning: `GitHub data for ${name} is unavailable: ${error.message || 'the request failed.'}`,
+      }];
     }
-    return [id, {
-      events: displayEvents,
-      pullRequests: currentPullRequest ? [{
-        ...currentPullRequest,
-        _team: name,
-        _teamId: id,
-        _repo: repo,
-      }] : [],
-      activity: lifecycleEvents.filter((event) => Date.parse(event.created_at) >= cutoff).length,
-      activityHistory,
-      activityTruncated: eventFeed.truncated,
-    }];
   })));
 }
 
@@ -185,7 +194,11 @@ async function fetchJson(url) {
     },
     signal: AbortSignal.timeout(15_000),
   });
-  if (!response.ok) throw new Error(`Request to ${new URL(url).host} returned HTTP ${response.status}.`);
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    const detail = body.message ? `: ${body.message}` : '';
+    throw new Error(`Request to ${new URL(url).host} returned HTTP ${response.status}${detail}.`);
+  }
   return response.json();
 }
 
@@ -240,6 +253,10 @@ function assembleSnapshot(tracker, counts, activityByTeam) {
     teams,
     events,
     pullRequests,
+    sourceWarnings: [...new Set(TEAMS.flatMap(({ id }) => [
+      activityByTeam?.[id]?.warning,
+      counts?.[id]?.warning,
+    ]).filter(Boolean))],
   };
 }
 
@@ -249,6 +266,10 @@ function findEffort(efforts, id) {
 
 function emptyCounts() {
   return { openPullRequests: null, totalPullRequests: null, mergedToday: null };
+}
+
+function emptyTeamActivity() {
+  return { events: [], pullRequests: [], activity: null, activityHistory: [], activityTruncated: false };
 }
 
 function validRepo(value) {
