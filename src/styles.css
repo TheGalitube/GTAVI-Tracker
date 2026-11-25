@@ -24,14 +24,11 @@ button:focus-visible, a:focus-visible { outline: 2px solid #ba8cff; outline-offs
 .app-shell::before { content: ""; position: fixed; z-index: -2; inset: 0 0 auto; height: 470px; background: url('./assets/city-at-dusk.png') center 41% / cover no-repeat; opacity: .62; }
 .app-shell::after { content: ""; position: fixed; z-index: -1; inset: 0; pointer-events: none; background: linear-gradient(180deg, rgba(8,11,19,.08) 0, #080b13 465px), linear-gradient(90deg, rgba(8,11,19,.25), transparent 60%); }
 
-.topbar { min-height: 62px; display: flex; align-items: stretch; gap: 40px; padding: 0 3.1vw; border-bottom: 1px solid rgba(198,208,230,.13); background: rgba(7,10,18,.73); backdrop-filter: blur(18px); }
-.brand { flex: 0 0 auto; display: flex; align-items: center; gap: 11px; padding-right: 30px; border-right: 1px solid var(--line); text-decoration: none; font-size: 17px; letter-spacing: -.035em; }
+.dashboard-intro { margin-bottom: 25px; }
+.intro-topline { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 20px; margin-bottom: 22px; }
+.brand { display: flex; align-items: center; gap: 11px; font-size: 17px; letter-spacing: -.035em; }
+.intro-status { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; font-size: 12px; color: var(--muted); }
 .brand-mark { color: var(--purple); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 21px; font-weight: 800; }
-.main-nav { display: flex; align-items: stretch; gap: 32px; }
-.main-nav a { position: relative; display: flex; align-items: center; color: #c4c9d4; font-size: 13px; font-weight: 570; text-decoration: none; transition: color .16s ease; }
-.main-nav a:hover, .main-nav a.selected { color: #fff; }
-.main-nav a.selected::after { content: ""; position: absolute; right: 0; bottom: 0; left: 0; height: 3px; background: var(--purple); box-shadow: 0 -2px 14px #b483ff80; }
-.topbar-status { margin-left: auto; display: flex; align-items: center; gap: 18px; font-size: 12px; color: var(--muted); }
 .live-indicator { display: inline-flex; align-items: center; gap: 8px; color: #71e9b1; font-size: 11px; font-weight: 760; letter-spacing: .12em; }
 .live-indicator i { width: 7px; height: 7px; border-radius: 50%; background: currentColor; box-shadow: 0 0 9px currentColor; }
 .live-indicator.offline { color: #ff927f; }
@@ -41,7 +38,7 @@ button:focus-visible, a:focus-visible { outline: 2px solid #ba8cff; outline-offs
 .sound-quick[aria-pressed="true"] { color: #c59bff; border-color: #8f6bd6; }
 
 .dashboard { width: min(1740px, 100%); margin: 0 auto; padding: 44px 3.1vw 24px; }
-.intro-row { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; margin-bottom: 25px; }
+.intro-row { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; }
 .eyebrow { margin: 0 0 9px; color: #d5d9e4; font-size: 11px; font-weight: 700; letter-spacing: .27em; }
 .eyebrow span { color: var(--purple); padding: 0 2px; }
 .intro-copy h1 { margin: 0; font-size: clamp(29px, 3.4vw, 47px); line-height: 1.02; letter-spacing: -.055em; font-weight: 760; }
@@ -212,8 +209,6 @@ button:focus-visible, a:focus-visible { outline: 2px solid #ba8cff; outline-offs
 
 @media (min-width: 1500px) { .dashboard { padding-top: 51px; } }
 @media (max-width: 1050px) {
-  .topbar { gap: 24px; }
-  .main-nav { gap: 20px; }
   .primary-grid { grid-template-columns: minmax(0, 1.4fr) minmax(310px, 1fr); }
   .stage-axis { margin-left: 113px; margin-right: 36px; }
   .race-lane { grid-template-columns: 115px minmax(80px, 1fr) 37px; gap: 10px; }
@@ -221,16 +216,13 @@ button:focus-visible, a:focus-visible { outline: 2px solid #ba8cff; outline-offs
   .feed-link { display: none; }
 }
 @media (max-width: 760px) {
-  .topbar { min-height: 57px; flex-wrap: wrap; gap: 0; padding: 0 18px; }
-  .brand { height: 56px; padding-right: 15px; font-size: 15px; }
-  .brand-mark { font-size: 18px; }
-  .main-nav { height: 40px; flex: 1 0 100%; order: 3; justify-content: space-between; gap: 12px; padding: 0 0 5px; }
-  .main-nav a { font-size: 11px; }
-  .topbar-status { height: 56px; gap: 8px; font-size: 10px; }
+  .intro-status { gap: 8px; font-size: 10px; }
   .updated-at { padding-left: 9px; }
   .sound-quick { width: 29px; height: 29px; }
   .dashboard { padding: 33px 17px 22px; }
-  .intro-row { align-items: flex-start; flex-direction: column; gap: 16px; margin-bottom: 19px; }
+  .dashboard-intro { margin-bottom: 19px; }
+  .intro-topline { margin-bottom: 16px; }
+  .intro-row { align-items: flex-start; flex-direction: column; gap: 16px; }
   .intro-copy h1 { max-width: 550px; font-size: clamp(32px, 8.1vw, 45px); }
   .intro-subtitle { max-width: 360px; font-size: 13px; line-height: 1.5; }
   .preview-button { height: 35px; font-size: 11px; }

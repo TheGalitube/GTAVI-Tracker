@@ -79,35 +79,33 @@ export default function App() {
 
   return (
     <div className="app-shell">
-      <header className="topbar">
-        <a className="brand" href="#top" aria-label="PortRace dashboard"><span className="brand-mark">&gt;_</span><strong>PortRace</strong></a>
-        <nav className="main-nav" aria-label="Main navigation">
-          <a className="selected" href="#top">Dashboard</a><a href="#pull-requests">Pull Requests</a><a href="#teams">Teams</a><a href="#race">Race</a>
-        </nav>
-        <div className="topbar-status">
-          <span className={`live-indicator ${connection}`}><i />{connection === 'live' ? 'LIVE' : connection === 'offline' ? 'OFFLINE' : 'WAITING'}</span>
-          <span className="updated-at">{snapshot?.updatedAt ? `Updated ${formatUpdated(snapshot.updatedAt)}` : 'Awaiting source'}</span>
-          <button className="sound-quick" onClick={() => { const muted = !muteFutureAlerts; setMuteFutureAlerts(muted); localStorage.setItem('portrace:mute-alerts', muted ? 'on' : 'off'); }} aria-label={muteFutureAlerts ? 'Enable alerts' : 'Mute future alerts'} aria-pressed={muteFutureAlerts}>
-            <BellRing size={17} />
-          </button>
-          <button className="sound-quick" onClick={() => changeSound(!soundEnabled)} aria-label={soundEnabled ? 'Turn sound off' : 'Turn sound on'} aria-pressed={soundEnabled}>
-            {soundEnabled ? <Volume2 size={17} /> : <VolumeX size={17} />}
-          </button>
-        </div>
-      </header>
-
       <main id="top" className="dashboard">
-        <div className="intro-row">
-          <div className="intro-copy">
-            <p className="eyebrow">GTA VI <span>·</span> PC PORT RACE</p>
-            <h1>Five contenders. One finish line.</h1>
-            <p className="intro-subtitle">Live progress toward GTA VI running on PC.</p>
+        <header className="dashboard-intro">
+          <div className="intro-topline">
+            <div className="brand"><span className="brand-mark" aria-hidden="true">&gt;_</span><strong>PortRace</strong></div>
+            <div className="intro-status">
+              <span className={`live-indicator ${connection}`}><i />{connection === 'live' ? 'LIVE' : connection === 'offline' ? 'OFFLINE' : 'WAITING'}</span>
+              <span className="updated-at">{snapshot?.updatedAt ? `Updated ${formatUpdated(snapshot.updatedAt)}` : 'Awaiting source'}</span>
+              <button className="sound-quick" onClick={() => { const muted = !muteFutureAlerts; setMuteFutureAlerts(muted); localStorage.setItem('portrace:mute-alerts', muted ? 'on' : 'off'); }} aria-label={muteFutureAlerts ? 'Enable alerts' : 'Mute future alerts'} aria-pressed={muteFutureAlerts}>
+                <BellRing size={17} />
+              </button>
+              <button className="sound-quick" onClick={() => changeSound(!soundEnabled)} aria-label={soundEnabled ? 'Turn sound off' : 'Turn sound on'} aria-pressed={soundEnabled}>
+                {soundEnabled ? <Volume2 size={17} /> : <VolumeX size={17} />}
+              </button>
+            </div>
           </div>
-          <div className="intro-actions">
-            <BackgroundMusic ducked={Boolean(activeAlert)} />
-            <button className="preview-button" onClick={() => setPreviewAlert(true)}><BellRing size={16} /> Preview alert</button>
+          <div className="intro-row">
+            <div className="intro-copy">
+              <p className="eyebrow">GTA VI <span>·</span> PC PORT RACE</p>
+              <h1>Five contenders. One finish line.</h1>
+              <p className="intro-subtitle">Live progress toward GTA VI running on PC.</p>
+            </div>
+            <div className="intro-actions">
+              <BackgroundMusic ducked={Boolean(activeAlert)} />
+              <button className="preview-button" onClick={() => setPreviewAlert(true)}><BellRing size={16} /> Preview alert</button>
+            </div>
           </div>
-        </div>
+        </header>
 
         {(connection !== 'live' || sourceWarning) && <div className={`connection-notice ${sourceWarning && connection === 'live' ? 'degraded' : connection}`} role="status">
           <Radio size={17} />
