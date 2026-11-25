@@ -103,7 +103,7 @@ export default function App() {
             <p className="intro-subtitle">Live progress toward GTA VI running on PC.</p>
           </div>
           <div className="intro-actions">
-            <BackgroundMusic />
+            <BackgroundMusic ducked={Boolean(activeAlert)} />
             <button className="preview-button" onClick={() => setPreviewAlert(true)}><BellRing size={16} /> Preview alert</button>
           </div>
         </div>

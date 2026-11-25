@@ -22,7 +22,7 @@ function labelFor(url, index) {
   }
 }
 
-export default function BackgroundMusic() {
+export default function BackgroundMusic({ ducked = false }) {
   const [urls, setUrls] = useState(readPlaylist);
   const [draft, setDraft] = useState(() => readPlaylist().join('\n'));
   const [localTracks, setLocalTracks] = useState([]);
@@ -54,9 +54,9 @@ export default function BackgroundMusic() {
   }, []);
 
   useEffect(() => {
-    if (audioRef.current) audioRef.current.volume = volume;
+    if (audioRef.current) audioRef.current.volume = volume * (ducked ? 0.8 : 1);
     localStorage.setItem(VOLUME_KEY, String(volume));
-  }, [volume]);
+  }, [volume, ducked]);
 
   const tracks = [
     ...localTracks.map((track) => ({
