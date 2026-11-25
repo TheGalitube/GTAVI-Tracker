@@ -2,13 +2,15 @@
 
 Install Node.js 18 or newer (npm is included), then run the installer for your platform from the project folder.
 
-## Windows PowerShell
+## Windows
 
-```powershell
-.\install.ps1
+Double-click `install.bat`, or run it from Command Prompt or PowerShell:
+
+```bat
+install.bat
 ```
 
-If PowerShell blocks local scripts, run it for this command only:
+The batch file launches the installer with a PowerShell execution-policy bypass scoped to that process, so it does not change your machine's policy. You can also run the installer directly in PowerShell:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\install.ps1
