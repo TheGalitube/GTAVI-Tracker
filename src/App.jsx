@@ -4,7 +4,6 @@ import RaceProgress from './components/RaceProgress.jsx';
 import LiveFeed from './components/LiveFeed.jsx';
 import TeamTable from './components/TeamTable.jsx';
 import AlertDialog from './components/AlertDialog.jsx';
-import TransientPRAlert from './components/TransientPRAlert.jsx';
 import { usePortwatch } from './hooks/usePortwatch.js';
 
 const previewEvent = {
@@ -75,10 +74,6 @@ export default function App() {
     else setAlerts((current) => current.slice(1));
   };
 
-  const dismissLiveAlert = useCallback(() => {
-    setAlerts((current) => current.slice(1));
-  }, []);
-
   return (
     <div className="app-shell">
       <header className="topbar">
@@ -87,7 +82,7 @@ export default function App() {
           <a className="selected" href="#top">Dashboard</a><a href="#pull-requests">Pull Requests</a><a href="#teams">Teams</a><a href="#race">Race</a>
         </nav>
         <div className="topbar-status">
-          <span className={`live-indicator ${connection}`}><i />{connection === 'live' ? 'LIVE' : connection === 'degraded' ? 'PARTIAL' : connection === 'offline' ? 'OFFLINE' : 'WAITING'}</span>
+          <span className={`live-indicator ${connection}`}><i />{connection === 'live' ? 'LIVE' : connection === 'offline' ? 'OFFLINE' : 'WAITING'}</span>
           <span className="updated-at">{snapshot?.updatedAt ? `Updated ${formatUpdated(snapshot.updatedAt)}` : 'Awaiting source'}</span>
           <button className="sound-quick" onClick={() => changeSound(!soundEnabled)} aria-label={soundEnabled ? 'Turn sound off' : 'Turn sound on'} aria-pressed={soundEnabled}>
             {soundEnabled ? <Volume2 size={17} /> : <VolumeX size={17} />}
@@ -102,15 +97,12 @@ export default function App() {
             <h1>Five contenders. One finish line.</h1>
             <p className="intro-subtitle">Live progress toward GTA VI running on PC.</p>
           </div>
-          <div className="intro-actions">
-            {muteFutureAlerts && <span className="muted-alert-note">Future alerts muted</span>}
-            <button className="preview-button" onClick={() => setPreviewAlert(true)}><BellRing size={16} /> Preview alert</button>
-          </div>
+          <button className="preview-button" onClick={() => setPreviewAlert(true)}><BellRing size={16} /> Preview alert</button>
         </div>
 
         {connection !== 'live' && <div className={`connection-notice ${connection}`} role="status">
           <Radio size={17} />
-          <div><strong>{connection === 'offline' ? 'Portwatch is unreachable' : connection === 'degraded' ? 'Some GitHub data is unavailable' : 'Waiting for Portwatch data'}</strong><span>{error || 'Live race data will appear here once the feed is connected.'}</span></div>
+          <div><strong>{connection === 'offline' ? 'Portwatch is unreachable' : 'Waiting for Portwatch data'}</strong><span>{error || 'Live race data will appear here once the feed is connected.'}</span></div>
           <a href="https://portwatch-vi.xyz/" target="_blank" rel="noreferrer">Open source <ExternalLink size={13} /></a>
         </div>}
 
@@ -133,8 +125,7 @@ export default function App() {
         <footer className="source-line"><span>Race data: <a href="https://portwatch-vi.xyz/" target="_blank" rel="noreferrer">portwatch-vi.xyz</a></span><span>Refreshes every 30 seconds</span></footer>
       </main>
 
-      {!previewAlert && alerts[0] && <TransientPRAlert key={`${alerts[0].id}-${alerts[0].kind}`} event={alerts[0]} onDismiss={dismissLiveAlert} />}
-      <AlertDialog event={previewAlert ? activeAlert : null} preview={previewAlert} soundEnabled={soundEnabled} muteFutureAlerts={muteFutureAlerts} onSoundChange={changeSound} onMuteFutureChange={(value) => { setMuteFutureAlerts(value); localStorage.setItem('portrace:mute-alerts', value ? 'on' : 'off'); }} onDismiss={dismissAlert} />
+      <AlertDialog event={activeAlert} preview={previewAlert} soundEnabled={soundEnabled} muteFutureAlerts={muteFutureAlerts} onSoundChange={changeSound} onMuteFutureChange={(value) => { setMuteFutureAlerts(value); localStorage.setItem('portrace:mute-alerts', value ? 'on' : 'off'); }} onDismiss={dismissAlert} />
     </div>
   );
 }

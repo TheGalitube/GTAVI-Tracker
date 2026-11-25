@@ -29,9 +29,8 @@ export function usePortwatch(onEvents) {
         const detected = findNewEvents(previous.current, next);
         previous.current = next;
         setSnapshot(next);
-        setConnection(next.sourceWarnings?.length ? 'degraded' : 'live');
-        const warnings = next.sourceWarnings ?? [];
-        setError(warnings.length ? `${warnings[0]}${warnings.length > 1 ? ` (+${warnings.length - 1} more warnings).` : ''}` : '');
+        setConnection('live');
+        setError('');
         if (detected.length) notify.current(detected);
       } catch (failure) {
         if (stopped || failure.name === 'AbortError') return;

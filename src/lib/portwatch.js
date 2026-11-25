@@ -10,10 +10,7 @@ export async function fetchPortwatchSnapshot(signal) {
     const body = await response.json().catch(() => ({}));
     return { state: 'unconfigured', message: body.message };
   }
-  if (!response.ok) {
-    const body = await response.json().catch(() => ({}));
-    throw new Error(body.message || `Portwatch returned ${response.status}`);
-  }
+  if (!response.ok) throw new Error(`Portwatch returned ${response.status}`);
 
   const payload = await response.json();
   return normalizeSnapshot(payload);
@@ -32,20 +29,12 @@ function normalizeSnapshot(payload) {
       ? payload.pull_requests
       : [];
 
-  const normalizedTeams = teams.map(normalizeTeam);
-  const teamColors = new Map(normalizedTeams.map((team) => [team.name.toLowerCase(), team.color]));
-  const normalizedEvents = events.map(normalizeEvent).map((event) => ({
-    ...event,
-    teamColor: event.teamColor ?? teamColors.get(event.team.toLowerCase()),
-  }));
-
   return {
     state: 'connected',
     updatedAt: payload.updatedAt || payload.updated_at || new Date().toISOString(),
-    teams: normalizedTeams,
-    events: normalizedEvents,
+    teams: teams.map(normalizeTeam),
+    events: events.map(normalizeEvent),
     pullRequests: pullRequests.map(normalizePullRequest),
-    sourceWarnings: Array.isArray(payload.sourceWarnings) ? payload.sourceWarnings.map(String) : [],
   };
 }
 
@@ -85,14 +74,11 @@ function normalizeEvent(event, index) {
     number: finiteNumber(event.number ?? event.pull_request_number),
     title: String(event.title ?? event.pull_request?.title ?? 'Pull request update'),
     team: String(event.team ?? event.repository_owner ?? event.author_association ?? 'Unknown team'),
-    teamColor: event.teamColor ?? event.team_color ?? null,
     author: String(event.author ?? event.user?.login ?? event.login ?? 'Contributor'),
-    avatarUrl: event.avatarUrl ?? event.author_avatar_url ?? event.user?.avatar_url ?? event.user?.avatarUrl ?? null,
     additions: finiteNumber(event.additions),
     deletions: finiteNumber(event.deletions),
     files: finiteNumber(event.changed_files ?? event.files),
     commits: finiteNumber(event.commits),
-    createdAt: event.createdAt ?? event.created_at ?? null,
     timestamp: event.timestamp ?? event.updated_at ?? event.created_at ?? new Date().toISOString(),
     url: event.url ?? event.html_url ?? null,
   };
@@ -113,28 +99,9 @@ function finiteNumber(value) {
 export function findNewEvents(previous, next) {
   if (!previous) return [];
   const oldEvents = new Map((previous.events ?? []).map((event) => [event.id, event.kind]));
-  const newEvents = (next.events ?? []).filter((event) => {
+  return (next.events ?? []).filter((event) => {
     if (!['opened', 'closed', 'merged'].includes(event.kind)) return false;
     const priorKind = oldEvents.get(event.id);
     return priorKind === undefined || priorKind !== event.kind;
   });
-
-  const oldPullRequests = new Set((previous.pullRequests ?? []).map((pullRequest) => pullRequest.id));
-  const eventPullRequests = new Set(newEvents.map(pullRequestKey).filter(Boolean));
-  const previousUpdatedAt = Date.parse(previous.updatedAt);
-  const newlyOpenedPullRequests = (next.pullRequests ?? []).filter((pullRequest) => {
-    if (pullRequest.kind !== 'opened' || oldPullRequests.has(pullRequest.id)) return false;
-    const createdAt = Date.parse(pullRequest.createdAt ?? pullRequest.timestamp);
-    return Number.isFinite(createdAt) && Number.isFinite(previousUpdatedAt) && createdAt >= previousUpdatedAt - 2_000;
-  });
-
-  return [
-    ...newEvents,
-    ...newlyOpenedPullRequests.filter((pullRequest) => !eventPullRequests.has(pullRequestKey(pullRequest))),
-  ];
-}
-
-function pullRequestKey(pullRequest) {
-  if (!pullRequest.number) return null;
-  return `${String(pullRequest.team ?? '').toLowerCase()}#${pullRequest.number}`;
 }
