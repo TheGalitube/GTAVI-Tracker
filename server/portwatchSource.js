@@ -186,11 +186,13 @@ async function githubSearchCount(query) {
 }
 
 async function fetchJson(url) {
+  const token = process.env.GITHUB_TOKEN?.trim();
   const response = await fetch(url, {
     headers: {
       Accept: 'application/vnd.github+json',
       'X-GitHub-Api-Version': '2022-11-28',
       'User-Agent': 'PortRaceTracker/0.1',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
     signal: AbortSignal.timeout(15_000),
   });
