@@ -38,3 +38,18 @@ export function dayChange(team, history, observedAt) {
   if (!baseline || team.progress == null) return null;
   return Math.round((team.progress - baseline.scores[team.id]) * 10) / 10;
 }
+
+export function mergeObservedHistory(history, teams, observedAt, cached = false) {
+  const cutoff = Date.now() - DAY - 600_000;
+  const samples = new Map();
+  for (const sample of history ?? []) {
+    if (!Number.isFinite(sample?.time) || sample.time < cutoff || !sample.scores || typeof sample.scores !== 'object') continue;
+    const scores = Object.fromEntries(Object.entries(sample.scores).filter(([, score]) => Number.isFinite(score)));
+    if (Object.keys(scores).length) samples.set(sample.time, { time: sample.time, scores });
+  }
+  if (!cached && Number.isFinite(observedAt) && observedAt >= cutoff) {
+    const scores = Object.fromEntries(teams.filter((team) => Number.isFinite(team.progress)).map((team) => [team.id, team.progress]));
+    if (Object.keys(scores).length) samples.set(observedAt, { time: observedAt, scores });
+  }
+  return [...samples.values()].sort((a, b) => a.time - b.time);
+}

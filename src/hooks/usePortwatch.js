@@ -1,12 +1,22 @@
 import { useEffect, useRef, useState } from 'react';
 import { fetchPortwatchSnapshot, findNewEvents, lifecycleEventKey } from '../lib/portwatch.js';
-import { raceChanges } from '../lib/broadcast.js';
+import { mergeObservedHistory, raceChanges } from '../lib/broadcast.js';
 
 const CACHE_KEY = 'portrace:last-snapshot-v1';
+const HISTORY_KEY = 'portrace:score-history-v1';
+
+function readHistory() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(HISTORY_KEY));
+    return Array.isArray(saved) ? saved : [];
+  } catch { return []; }
+}
 function readCache() {
   try {
     const saved = JSON.parse(localStorage.getItem(CACHE_KEY));
-    return saved?.state === 'connected' && ['teams', 'events', 'pullRequests', 'history'].every((key) => Array.isArray(saved[key])) ? saved : null;
+    if (saved?.state !== 'connected' || !['teams', 'events', 'pullRequests', 'history'].every((key) => Array.isArray(saved[key]))) return null;
+    saved.history = mergeObservedHistory([...readHistory(), ...saved.history], saved.teams, saved.raceObservedAt, saved.raceCached);
+    return saved;
   } catch { return null; }
 }
 const POLL_MS = 10_000;
@@ -37,6 +47,12 @@ export function usePortwatch(onEvents) {
       try {
         const next = await fetchPortwatchSnapshot(controller.signal);
         if (stopped) return;
+        const history = readHistory();
+        next.history = mergeObservedHistory([...history, ...(next.history ?? [])], next.teams, next.raceObservedAt, next.raceCached);
+        try {
+          const serializedHistory = JSON.stringify(next.history);
+          if (localStorage.getItem(HISTORY_KEY) !== serializedHistory) localStorage.setItem(HISTORY_KEY, serializedHistory);
+        } catch { /* History can still come from the server. */ }
         if (next.state === 'unconfigured') {
           setConnection('unconfigured');
           setError(next.message || 'The Portwatch feed adapter is not configured yet.');

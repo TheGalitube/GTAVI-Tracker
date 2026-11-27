@@ -35,7 +35,8 @@ function normalizeSnapshot(payload) {
     sourceWarnings: Array.isArray(payload.sourceWarnings)
       ? payload.sourceWarnings.filter((warning) => typeof warning === 'string' && warning.trim())
       : [],
-    raceObservedAt: finiteNumber(payload.raceObservedAt) ?? Date.parse(payload.updatedAt),
+    raceObservedAt: finiteNumber(payload.raceObservedAt)
+      ?? (payload.sourceUpdatedAt || payload.source_updated_at ? Date.parse(payload.sourceUpdatedAt || payload.source_updated_at) : null),
     raceCached: Boolean(payload.raceCached),
     history: Array.isArray(payload.history) ? payload.history : [],
     developments: Array.isArray(payload.developments) ? payload.developments : [],
