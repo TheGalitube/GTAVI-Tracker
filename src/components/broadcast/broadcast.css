@@ -91,6 +91,9 @@
 .air-bars { height: 75%; display: flex; gap: 2px; align-items: flex-end; border-bottom: 1px solid var(--air-line); }
 .air-bars i { flex: 1; }
 .air-pr-meta { margin: 1em 0 .65em; }
+.air-feature-card { display: flex; flex: 1; flex-direction: column; min-height: 0; }
+.air-feature-timer { height: 3px; flex: none; margin-top: .65em; background: var(--air-line); border-radius: 2px; overflow: hidden; }
+.air-feature-timer i { display: block; height: 100%; background: var(--purple); transform-origin: left; }
 .air-feature-title { display: block; min-height: 0; flex: 1; font-size: 1.55em; line-height: 1.22; letter-spacing: -.025em; overflow-wrap: anywhere; }
 .air-pr-counts { display: grid; grid-template-columns: repeat(4,1fr); padding-top: .75em; border-top: 1px solid var(--air-line); }
 .air-pr-counts b,.air-pr-counts small { display: block; }

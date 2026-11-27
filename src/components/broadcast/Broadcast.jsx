@@ -45,8 +45,53 @@ function Feed({ events }) {
 }
 
 function Featured({ pulls }) {
-  const index = useRotation(pulls.length, 20_000);
+  const [selectedId, setSelectedId] = useState(null);
+  const index = Math.max(0, pulls.findIndex((item) => item.id === selectedId));
   const pr = pulls[index];
+  const currentId = pr?.id ?? null;
+  if (selectedId !== currentId) setSelectedId(currentId);
+
+  const rotating = pulls.length > 1;
+  const nextId = useRef(null);
+  const card = useRef(null);
+  const bar = useRef(null);
+  useLayoutEffect(() => {
+    nextId.current = rotating ? pulls[(index + 1) % pulls.length].id : null;
+  }, [pulls, index, rotating]);
+
+  useLayoutEffect(() => {
+    if (!rotating) return;
+    const duration = 20_000;
+    const fade = 350 / duration;
+    const motion = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const progress = bar.current.animate(
+      [{ transform: 'scaleX(0)' }, { transform: 'scaleX(1)' }],
+      { duration, fill: 'both' }
+    );
+    const transition = card.current.animate([
+      { opacity: 0, transform: 'translateY(4px)' },
+      { offset: fade, opacity: 1, transform: 'none' },
+      { offset: 1 - fade, opacity: 1, transform: 'none' },
+      { opacity: 0, transform: 'translateY(-4px)' },
+    ], { duration, fill: 'both' });
+    const applyMotion = () => {
+      progress.effect.updateTiming({ easing: motion.matches ? 'steps(20, end)' : 'linear' });
+      if (motion.matches) transition.cancel();
+      else {
+        transition.play();
+        transition.currentTime = progress.currentTime;
+      }
+    };
+    applyMotion();
+    motion.addEventListener('change', applyMotion);
+    progress.onfinish = () => setSelectedId(nextId.current);
+    return () => {
+      motion.removeEventListener('change', applyMotion);
+      progress.onfinish = null;
+      progress.cancel();
+      transition.cancel();
+    };
+  }, [currentId, rotating]);
   const title = useRef(null);
   useLayoutEffect(() => {
     if (!title.current) return;
@@ -62,9 +107,12 @@ function Featured({ pulls }) {
     return () => observer.disconnect();
   }, [pr?.id, pr?.title]);
   return <section className="air-feature"><h2>Featured PR</h2>{pr ? <>
-    <div className="air-pr-meta"><i style={{ background: pr.teamColor }} />{pr.team} · #{pr.number ?? '—'} · {pr.kind === 'opened' ? 'Open' : pr.kind}</div>
-    <strong className="air-feature-title" ref={title}>{pr.title}</strong>
-    <div className="air-pr-counts">{[['Additions', pr.additions], ['Deletions', pr.deletions], ['Files', pr.files], ['Commits', pr.commits]].map(([label, value]) => <div key={label}><b>{amount(value)}</b><small>{label}</small></div>)}</div>
+    <div className="air-feature-card" ref={card}>
+      <div className="air-pr-meta"><i style={{ background: pr.teamColor }} />{pr.team} · #{pr.number ?? '—'} · {pr.kind === 'opened' ? 'Open' : pr.kind}</div>
+      <strong className="air-feature-title" ref={title}>{pr.title}</strong>
+      <div className="air-pr-counts">{[['Additions', pr.additions], ['Deletions', pr.deletions], ['Files', pr.files], ['Commits', pr.commits]].map(([label, value]) => <div key={label}><b>{amount(value)}</b><small>{label}</small></div>)}</div>
+    </div>
+    {rotating && <div className="air-feature-timer" aria-hidden="true"><i ref={bar} style={{ backgroundColor: pr.teamColor }} /></div>}
   </> : <p className="air-empty">Waiting for a pull request.</p>}</section>;
 }
 
