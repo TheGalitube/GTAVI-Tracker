@@ -92,18 +92,26 @@ button:focus-visible, a:focus-visible { outline: 2px solid #ba8cff; outline-offs
 .section-heading svg { transform: rotate(180deg); color: #828ca0; }
 .race-panel, .feed-panel, .current-pr, .team-table-wrap { border: 1px solid rgba(173,185,210,.14); background: var(--panel); box-shadow: 0 12px 44px rgba(0,0,0,.18); backdrop-filter: blur(14px); }
 .race-panel { padding: 12px 18px 13px; border-radius: 9px; }
-.stage-axis { height: 27px; position: relative; margin-left: 143px; margin-right: 43px; display: flex; justify-content: space-between; align-items: flex-start; }
-.stage-axis::after { content: ""; position: absolute; top: 20px; right: 0; left: 0; height: 1px; background: #596173; }
-.stage-axis span { position: relative; z-index: 1; color: #c2c7d1; font-size: 10px; white-space: nowrap; }
-.stage-axis span::after { content: ""; position: absolute; left: 50%; top: 17px; width: 8px; height: 8px; transform: translateX(-50%); border: 1.5px solid #b9c2d3; border-radius: 50%; background: #171c28; }
+.stage-axis, .race-lane { display: grid; grid-template-columns: 145px minmax(100px, 1fr) 44px; column-gap: 16px; }
+.stage-scale { grid-column: 2; height: 27px; position: relative; }
+.stage-scale::before { content: ""; position: absolute; top: 20px; right: 0; left: 0; height: 1px; background: #596173; }
+.stage-tick { position: absolute; top: 0; }
+.stage-label { display: block; width: max-content; transform: translateX(-50%); color: #c2c7d1; font-size: 10px; white-space: nowrap; }
+.stage-tick::after { content: ""; position: absolute; top: 20.5px; left: 0; width: 8px; height: 8px; transform: translate(-50%, -50%); border: 1.5px solid #b9c2d3; border-radius: 50%; background: #171c28; }
 .team-lanes { display: flex; flex-direction: column; }
-.race-lane { height: 43px; display: grid; grid-template-columns: 145px minmax(100px, 1fr) 44px; gap: 16px; align-items: center; border-bottom: 1px solid rgba(155,167,190,.1); }
+.race-lane { height: 43px; align-items: center; border-bottom: 1px solid rgba(155,167,190,.1); }
 .race-lane:last-child { border-bottom: 0; }
 .lane-name { display: flex; align-items: center; gap: 11px; overflow: hidden; color: #f2f3f8; text-overflow: ellipsis; text-decoration: none; font-size: 15px; font-weight: 690; letter-spacing: -.02em; white-space: nowrap; }
 .lane-name:hover { color: var(--team-color); }
 .team-mark { display: inline-block; width: 5px; height: 24px; flex: 0 0 auto; border-radius: 4px; background: var(--team-color, #8d97ab); box-shadow: 0 0 10px color-mix(in srgb, var(--team-color, #8d97ab) 45%, transparent); }
 .lane-track { position: relative; height: 7px; border-radius: 10px; background: linear-gradient(90deg, #353e50 0%, #465166 100%); }
-.lane-fill { height: 100%; border-radius: inherit; background: var(--team-color); box-shadow: 0 0 9px color-mix(in srgb, var(--team-color) 70%, transparent); }
+.lane-fill { position: relative; height: 100%; border-radius: inherit; background: var(--team-color); box-shadow: 0 0 9px color-mix(in srgb, var(--team-color) 70%, transparent); }
+.lane-marker { position: absolute; z-index: 1; top: 50%; left: 100%; width: 10px; height: 10px; transform: translate(-50%, -50%) rotate(45deg); border: 1.5px solid color-mix(in srgb, var(--team-color) 30%, white); border-radius: 2px; background: var(--team-color); box-shadow: 0 0 0 1px #202531; }
+.lane-marker::before { content: ""; position: absolute; inset: -1px; border-radius: inherit; box-shadow: 0 0 7px 2px var(--team-color); opacity: .4; }
+@media (prefers-reduced-motion: no-preference) {
+  .lane-marker::before { animation: marker-glow 3.6s ease-in-out infinite alternate; }
+  @keyframes marker-glow { from { opacity: .28; } to { opacity: .55; } }
+}
 .stage-dot { position: absolute; top: 50%; width: 9px; height: 9px; transform: translate(-50%, -50%); border: 1.5px solid #9aa5b8; border-radius: 50%; background: #121722; }
 .stage-dot.reached { border-color: #f2f3f7; background: var(--team-color); box-shadow: 0 0 5px var(--team-color); }
 .lane-percent { color: #f3f4f8; font-size: 14px; text-align: right; }
@@ -210,8 +218,7 @@ button:focus-visible, a:focus-visible { outline: 2px solid #ba8cff; outline-offs
 @media (min-width: 1500px) { .dashboard { padding-top: 51px; } }
 @media (max-width: 1050px) {
   .primary-grid { grid-template-columns: minmax(0, 1.4fr) minmax(310px, 1fr); }
-  .stage-axis { margin-left: 113px; margin-right: 36px; }
-  .race-lane { grid-template-columns: 115px minmax(80px, 1fr) 37px; gap: 10px; }
+  .stage-axis, .race-lane { grid-template-columns: 115px minmax(80px, 1fr) 37px; column-gap: 10px; }
   .feed-row { grid-template-columns: 15px 31px minmax(0, 1fr) auto; gap: 7px; }
   .feed-link { display: none; }
 }
@@ -236,12 +243,13 @@ button:focus-visible, a:focus-visible { outline: 2px solid #ba8cff; outline-offs
   .connection-notice a { margin-left: 29px; }
   .primary-grid { grid-template-columns: minmax(0, 1fr); gap: 14px; }
   .race-panel { padding: 11px 10px 10px; }
-  .stage-axis { height: 31px; margin-left: 87px; margin-right: 36px; }
-  .stage-axis span { font-size: 8px; letter-spacing: -.04em; }
-  .stage-axis span:nth-child(2), .stage-axis span:nth-child(4) { display: none; }
-  .stage-axis::after { top: 20px; }
-  .stage-axis span::after { top: 17px; width: 7px; height: 7px; }
-  .race-lane { height: 41px; grid-template-columns: 88px minmax(50px, 1fr) 34px; gap: 7px; }
+  .stage-axis, .race-lane { grid-template-columns: 88px minmax(50px, 1fr) 34px; column-gap: 7px; }
+  .stage-scale { height: 31px; }
+  .stage-label { font-size: 8px; letter-spacing: -.04em; }
+  .stage-tick:nth-child(2) .stage-label, .stage-tick:nth-child(4) .stage-label { display: none; }
+  .stage-tick::after { width: 7px; height: 7px; }
+  .race-lane { height: 41px; }
+  .lane-marker { width: 8px; height: 8px; }
   .lane-name { gap: 7px; font-size: 11px; }
   .team-mark { width: 4px; height: 19px; }
   .lane-track { height: 6px; }
