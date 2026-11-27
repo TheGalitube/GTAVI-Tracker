@@ -28,4 +28,6 @@ The installer installs the npm dependencies, creates `./music`, and creates `.en
 
 The home page opens in broadcast mode. Press **Escape** or open `/dashboard` to set music and alert sound. Select **Broadcast mode** on the dashboard to enter fullscreen. Browser sources can use either `/` or `/broadcast`. The layout fits a 16:9 stream and cycles through sections on portrait screens.
 
+Broadcast alerts fill the screen and play a chime when they appear. Sound defaults to on and follows the dashboard sound setting. If the browser restricts autoplay, click the page once before streaming to enable audio.
+
 The server records a team score when a dashboard request refreshes the race feed, about every five minutes while the tracker is open. Keep `.portrace/history.json` across restarts to retain the last day of observations. Gaps in coverage stay visible in the chart. Daily changes appear when the server has a sample from 24 hours earlier, within one refresh interval plus scheduling tolerance.

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { BellOff, BellRing, Flag, GitMerge, GitPullRequest, TrendingUp, ChevronDown, ExternalLink, Radio, Volume2, VolumeX } from 'lucide-react';
+import { BellOff, BellRing, ChevronDown, ExternalLink, Radio, Volume2, VolumeX } from 'lucide-react';
 import Broadcast from './components/broadcast/Broadcast.jsx';
 import RaceProgress from './components/RaceProgress.jsx';
 import CurrentPullRequest from './components/CurrentPullRequest.jsx';
@@ -52,19 +52,39 @@ export default function App() {
   const [raceExpanded, setRaceExpanded] = useState(true);
   const [alerts, setAlerts] = useState([]);
   const [previewAlert, setPreviewAlert] = useState(false);
-  const [soundEnabled, setSoundEnabled] = useState(() => localStorage.getItem('portrace:sound') === 'on');
+  const [soundEnabled, setSoundEnabled] = useState(() => localStorage.getItem('portrace:sound') !== 'off');
   const [muteFutureAlerts, setMuteFutureAlerts] = useState(() => localStorage.getItem('portrace:mute-alerts') === 'on');
   const audioContext = useRef(null);
 
-  const playChime = useCallback((force = false, kind = 'opened') => {
-    if (!soundEnabled && !force) return;
+  const prepareAudio = useCallback(() => {
     const Context = window.AudioContext || window.webkitAudioContext;
-    if (!Context) return;
+    if (!Context) return null;
     audioContext.current ||= new Context();
+    return audioContext.current;
+  }, []);
+
+  useEffect(() => {
+    if (!soundEnabled) return;
+    const context = prepareAudio();
+    if (!context) return;
+    const unlock = () => {
+      if (context.state !== 'running') context.resume().catch(() => {});
+    };
+    window.addEventListener('click', unlock);
+    window.addEventListener('keydown', unlock);
+    return () => {
+      window.removeEventListener('click', unlock);
+      window.removeEventListener('keydown', unlock);
+      audioContext.current = null;
+      context.close().catch(() => {});
+    };
+  }, [soundEnabled, prepareAudio]);
+
+  const playChime = useCallback((kind = 'opened') => {
     const context = audioContext.current;
-    if (context.state === 'suspended') context.resume().catch(() => {});
+    if (!context || context.state !== 'running') return;
     const start = context.currentTime;
-    const notes = { merged: [660, 990], position: [440, 550], milestone: [550, 740, 990] };
+    const notes = { closed: [660, 440], merged: [660, 990], position: [440, 550], milestone: [550, 740, 990] };
     (notes[kind] ?? [660, 880]).forEach((frequency, index) => {
       const oscillator = context.createOscillator();
       const gain = context.createGain();
@@ -78,15 +98,14 @@ export default function App() {
       oscillator.start(start + index * 0.13);
       oscillator.stop(start + index * 0.13 + 0.36);
     });
-  }, [soundEnabled]);
+  }, []);
 
   const onEvents = useCallback((events) => {
-    const kinds = broadcast ? ['opened', 'merged', 'milestone', 'position'] : ['opened', 'closed', 'merged'];
+    const kinds = broadcast ? ['opened', 'closed', 'merged', 'milestone', 'position'] : ['opened', 'closed', 'merged'];
     const lifecycleEvents = events.filter((event) => kinds.includes(event.kind));
     if (!lifecycleEvents.length || muteFutureAlerts) return;
     setAlerts((current) => [...current, ...lifecycleEvents].slice(-24));
-    if (!broadcast) playChime();
-  }, [broadcast, playChime, muteFutureAlerts]);
+  }, [broadcast, muteFutureAlerts]);
 
   const { snapshot, movement, raceNews, connection, error, retry, retrying } = usePortwatch(onEvents);
   const sourceWarnings = snapshot?.sourceWarnings ?? [];
@@ -103,11 +122,11 @@ export default function App() {
   const sounded = useRef(null);
   useEffect(() => {
     if (!activeAlert) { sounded.current = null; return; }
-    if (broadcast && sounded.current !== activeAlert) {
+    if (soundEnabled && sounded.current !== activeAlert) {
       sounded.current = activeAlert;
-      playChime(false, activeAlert.kind);
+      playChime(activeAlert.kind);
     }
-  }, [broadcast, activeAlert, playChime]);
+  }, [soundEnabled, activeAlert, playChime]);
   const airStatus = connection !== 'live'
     ? (snapshot ? 'Cached · reconnecting' : connection === 'connecting' ? 'Connecting' : 'Reconnecting')
     : snapshot?.raceCached ? 'Cached race data' : showWarnings ? 'Partial data' : 'Live';
@@ -115,10 +134,9 @@ export default function App() {
   const changeSound = (enabled) => {
     setSoundEnabled(enabled);
     localStorage.setItem('portrace:sound', enabled ? 'on' : 'off');
-    if (enabled && (window.AudioContext || window.webkitAudioContext)) {
-      audioContext.current ||= new (window.AudioContext || window.webkitAudioContext)();
-      audioContext.current.resume().catch(() => {});
-      playChime(true);
+    if (enabled) {
+      const context = prepareAudio();
+      context?.resume().then(() => playChime()).catch(() => {});
     }
   };
 
@@ -196,25 +214,12 @@ export default function App() {
       <span className="sr-only" role="status" aria-atomic="true">
         {activeAlert && `${previewAlert ? 'Preview. ' : ''}${activeAlert.team} ${activeAlert.number == null ? alertLabels[activeAlert.kind] : `pull request #${activeAlert.number} ${activeAlert.kind}`}. ${activeAlert.title}`}
       </span>
-      {broadcast && activeAlert ? <AirAlert key={activeAlert.id + activeAlert.kind} event={activeAlert} dismiss={dismissAlert} /> : <TransientPRAlert key={`${activeAlert?.id ?? 'none'}-${activeAlert?.kind ?? ''}`} event={activeAlert} preview={previewAlert} onDismiss={dismissAlert} />}
+      <TransientPRAlert key={`${activeAlert?.id ?? 'none'}-${activeAlert?.kind ?? ''}`} event={activeAlert} broadcast={broadcast} preview={previewAlert} onDismiss={dismissAlert} />
     </div>
   );
 }
 
 const alertLabels = { opened: 'Pull request opened', closed: 'Pull request closed', merged: 'Pull request merged', position: 'Leaderboard change', milestone: 'Milestone reached' };
-
-function AirAlert({ event, dismiss }) {
-  useEffect(() => {
-    const timer = setTimeout(dismiss, 6500);
-    return () => clearTimeout(timer);
-  }, [dismiss]);
-  const Icon = { merged: GitMerge, milestone: Flag, position: TrendingUp }[event.kind] ?? GitPullRequest;
-  return <aside className={'air-alert air-alert-' + event.kind} style={{ '--team': event.teamColor }}>
-    <small><Icon size="1.2em" aria-hidden="true" /> {alertLabels[event.kind]}</small>
-    <b>{event.team}{event.number != null && ' · #' + event.number}</b>
-    <span>{event.title}</span>
-  </aside>;
-}
 
 function formatUpdated(value) {
   const date = new Date(value);
