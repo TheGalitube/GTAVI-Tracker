@@ -1,10 +1,22 @@
+import { recordRace } from './raceHistory.js';
+
 const TRACKER_URL = 'https://portwatch-vi.xyz/data/tracker.json';
 const GITHUB_API = 'https://api.github.com';
 const TRACKER_CACHE_MS = 5 * 60_000;
 const COUNT_CACHE_MS = 5 * 60_000;
 const PR_CACHE_MS = 10_000;
 
-const TEAM_COLORS = ['#b483ff', '#ff9b59', '#3edbd0', '#5a9cff', '#3dd99b'];
+const TEAM_LIMIT = 5;
+const originalColors = {
+  zettrox: '#b483ff', 'victory-gta6': '#e7b870', vitoriabr: '#3edbd0', marvis: '#82a5ed', xcl: '#78c68a',
+  belobug: '#b483ff', 'victory-nvidia': '#ff9b59', avatarmanz: '#3edbd0', dexnom: '#5a9cff', kelvaroq: '#3dd99b',
+};
+function teamColor(id) {
+  if (Object.hasOwn(originalColors, id)) return originalColors[id];
+  let hash = 0;
+  for (const ch of id) hash = (Math.imul(hash, 31) + ch.charCodeAt(0)) | 0;
+  return `hsl(${Math.abs(hash) % 360} 67% 68%)`;
+}
 const trackerCache = { value: null, expiresAt: 0, promise: null };
 let githubCaches;
 
@@ -35,7 +47,7 @@ function selectTeams(efforts) {
     if (repos.has(key)) return false;
     repos.add(key);
     return true;
-  }).slice(0, TEAM_COLORS.length);
+  }).slice(0, TEAM_LIMIT);
 }
 
 async function cached(cache, ttl, load) {
@@ -45,10 +57,13 @@ async function cached(cache, ttl, load) {
   try {
     const value = await cache.promise;
     cache.value = value;
+    cache.observedAt = Date.now();
+    cache.stale = false;
     cache.expiresAt = Date.now() + ttl;
     return value;
   } catch (error) {
     if (cache.value) {
+      cache.stale = true;
       cache.expiresAt = Date.now() + 30_000;
       return cache.value;
     }
@@ -72,12 +87,14 @@ async function fetchTeamCounts(teams) {
       githubSearchCount(`repo:${repo} is:pr is:open`),
       githubSearchCount(`repo:${repo} is:pr`),
       githubSearchCount(`repo:${repo} is:pr is:merged merged:>=${today}`),
+      githubSearchCount(`repo:${repo} is:pr is:merged`),
     ];
     const result = await Promise.allSettled(queries);
     return [id, {
       openPullRequests: settledNumber(result[0]),
       totalPullRequests: settledNumber(result[1]),
       mergedToday: settledNumber(result[2]),
+      mergedTotal: settledNumber(result[3]),
     }];
   })));
 }
@@ -210,17 +227,18 @@ async function fetchJson(url) {
 }
 
 function assembleSnapshot(tracker, rankedTeams, counts, activityByTeam) {
-  const teams = rankedTeams.map(({ id, name, repo, progress, stage, stats }, index) => {
+  const teams = rankedTeams.map(({ id, name, repo, progress, stage, stats }) => {
     const metrics = counts?.[id] ?? emptyCounts();
     return {
       id,
       name,
-      color: TEAM_COLORS[index],
+      color: teamColor(id),
       progress,
       stage,
       openPullRequests: metrics.openPullRequests,
       totalPullRequests: metrics.totalPullRequests,
       mergedToday: metrics.mergedToday,
+      mergedTotal: metrics.mergedTotal ?? null,
       stars: numberOrNull(stats?.stars),
       activity: activityByTeam?.[id]?.activity ?? null,
       activityHistory: activityByTeam?.[id]?.activityHistory ?? [],
@@ -254,10 +272,20 @@ function assembleSnapshot(tracker, rankedTeams, counts, activityByTeam) {
     state: 'connected',
     updatedAt: new Date().toISOString(),
     sourceUpdatedAt: tracker.updated ?? null,
+    raceObservedAt: trackerCache.observedAt,
+    raceCached: Boolean(trackerCache.stale),
+    history: recordRace(teams, trackerCache.observedAt),
+    developments: (Array.isArray(tracker.changes) ? tracker.changes : []).slice(0, 5)
+      .filter((change) => typeof change.text === 'string')
+      .map(({ date, text }) => ({ date, text })),
     teams,
     events,
     pullRequests,
-    sourceWarnings: [...new Set(teams.map(({ id }) => activityByTeam?.[id]?.warning).filter(Boolean))],
+    sourceWarnings: teams.flatMap((team) => [
+      activityByTeam?.[team.id]?.warning,
+      [team.openPullRequests, team.mergedToday, team.mergedTotal, team.totalPullRequests].some((n) => n == null)
+        ? `GitHub counts for ${team.name} are incomplete.` : null,
+    ].filter(Boolean)),
   };
 }
 

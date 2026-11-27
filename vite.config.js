@@ -51,6 +51,7 @@ export default defineConfig(({ mode }) => {
           '**/.git/**',
           '**/dist/**',
           '**/music/**',
+          '**/.portrace/**',
           '**/local-audio/**',
           '**/*.{aac,flac,m4a,mp3,oga,ogg,opus,wav,weba,webm}',
         ],

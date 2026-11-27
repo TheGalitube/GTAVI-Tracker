@@ -1,5 +1,6 @@
-import { useCallback, useRef, useState } from 'react';
-import { BellOff, BellRing, ChevronDown, ExternalLink, Radio, Volume2, VolumeX } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { BellOff, BellRing, Flag, GitMerge, GitPullRequest, TrendingUp, ChevronDown, ExternalLink, Radio, Volume2, VolumeX } from 'lucide-react';
+import Broadcast from './components/broadcast/Broadcast.jsx';
 import RaceProgress from './components/RaceProgress.jsx';
 import CurrentPullRequest from './components/CurrentPullRequest.jsx';
 import LiveFeed from './components/LiveFeed.jsx';
@@ -15,6 +16,34 @@ const previewEvent = {
 };
 
 export default function App() {
+  const [broadcast, setBroadcast] = useState(() => location.pathname.replace(/\/$/, '') === '/broadcast');
+  useEffect(() => {
+    const sync = () => setBroadcast(location.pathname.replace(/\/$/, '') === '/broadcast');
+    window.addEventListener('popstate', sync);
+    return () => window.removeEventListener('popstate', sync);
+  }, []);
+  useEffect(() => {
+    if (!broadcast) return;
+    const leave = () => {
+      history.replaceState(null, '', '/');
+      setBroadcast(false);
+      if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+    };
+    const key = (event) => { if (event.key === 'Escape') leave(); };
+    const fullscreen = () => { if (!document.fullscreenElement) leave(); };
+    window.addEventListener('keydown', key);
+    document.addEventListener('fullscreenchange', fullscreen);
+    return () => {
+      window.removeEventListener('keydown', key);
+      document.removeEventListener('fullscreenchange', fullscreen);
+    };
+  }, [broadcast]);
+  const startBroadcast = () => {
+    history.pushState(null, '', '/broadcast');
+    setBroadcast(true);
+    document.documentElement.requestFullscreen?.().catch(() => {});
+  };
+
   const [raceExpanded, setRaceExpanded] = useState(true);
   const [alerts, setAlerts] = useState([]);
   const [previewAlert, setPreviewAlert] = useState(false);
@@ -22,15 +51,16 @@ export default function App() {
   const [muteFutureAlerts, setMuteFutureAlerts] = useState(() => localStorage.getItem('portrace:mute-alerts') === 'on');
   const audioContext = useRef(null);
 
-  const playChime = useCallback((force = false) => {
+  const playChime = useCallback((force = false, kind = 'opened') => {
     if (!soundEnabled && !force) return;
     const Context = window.AudioContext || window.webkitAudioContext;
     if (!Context) return;
     audioContext.current ||= new Context();
     const context = audioContext.current;
-    if (context.state === 'suspended') context.resume();
+    if (context.state === 'suspended') context.resume().catch(() => {});
     const start = context.currentTime;
-    [660, 880].forEach((frequency, index) => {
+    const notes = { merged: [660, 990], position: [440, 550], milestone: [550, 740, 990] };
+    (notes[kind] ?? [660, 880]).forEach((frequency, index) => {
       const oscillator = context.createOscillator();
       const gain = context.createGain();
       oscillator.type = 'sine';
@@ -46,13 +76,14 @@ export default function App() {
   }, [soundEnabled]);
 
   const onEvents = useCallback((events) => {
-    const lifecycleEvents = events.filter((event) => ['opened', 'closed', 'merged'].includes(event.kind));
+    const kinds = broadcast ? ['opened', 'merged', 'milestone', 'position'] : ['opened', 'closed', 'merged'];
+    const lifecycleEvents = events.filter((event) => kinds.includes(event.kind));
     if (!lifecycleEvents.length || muteFutureAlerts) return;
-    setAlerts((current) => [...current, ...lifecycleEvents]);
-    playChime();
-  }, [playChime, muteFutureAlerts]);
+    setAlerts((current) => [...current, ...lifecycleEvents].slice(-24));
+    if (!broadcast) playChime();
+  }, [broadcast, playChime, muteFutureAlerts]);
 
-  const { snapshot, connection, error, retry, retrying } = usePortwatch(onEvents);
+  const { snapshot, movement, raceNews, connection, error, retry, retrying } = usePortwatch(onEvents);
   const sourceWarnings = snapshot?.sourceWarnings ?? [];
   const showWarnings = connection === 'live' && sourceWarnings.length > 0;
   const teams = snapshot?.teams ?? [];
@@ -64,12 +95,24 @@ export default function App() {
   const openPullRequests = (snapshot?.pullRequests ?? []).filter((event) => event.kind === 'opened');
   const activeAlert = previewAlert ? previewEvent : alerts[0] ?? null;
 
+  const sounded = useRef(null);
+  useEffect(() => {
+    if (!activeAlert) { sounded.current = null; return; }
+    if (broadcast && sounded.current !== activeAlert) {
+      sounded.current = activeAlert;
+      playChime(false, activeAlert.kind);
+    }
+  }, [broadcast, activeAlert, playChime]);
+  const airStatus = connection !== 'live'
+    ? (snapshot ? 'Cached · reconnecting' : connection === 'connecting' ? 'Connecting' : 'Reconnecting')
+    : snapshot?.raceCached ? 'Cached race data' : showWarnings ? 'Partial data' : 'Live';
+
   const changeSound = (enabled) => {
     setSoundEnabled(enabled);
     localStorage.setItem('portrace:sound', enabled ? 'on' : 'off');
     if (enabled && (window.AudioContext || window.webkitAudioContext)) {
       audioContext.current ||= new (window.AudioContext || window.webkitAudioContext)();
-      audioContext.current.resume();
+      audioContext.current.resume().catch(() => {});
       playChime(true);
     }
   };
@@ -87,13 +130,13 @@ export default function App() {
   }, [previewAlert]);
 
   return (
-    <div className="app-shell">
+    <div className={broadcast ? 'app-shell broadcast' : 'app-shell'}>
       <main id="top" className="dashboard">
         <header className="dashboard-intro">
           <div className="intro-topline">
-            <div className="brand"><span className="brand-mark" aria-hidden="true">&gt;_</span><strong>PortRace</strong></div>
+            <div className="brand"><span className="brand-mark" aria-hidden="true">&gt;_</span><strong>PortRace</strong>{broadcast && <span className="air-subtitle">GTA VI PC port race</span>}</div>
             <div className="intro-status">
-              <span className={`live-indicator ${connection}`}><i />{connection === 'live' ? 'LIVE' : connection === 'offline' ? 'OFFLINE' : 'WAITING'}</span>
+              <span className={`live-indicator ${broadcast && airStatus !== 'Live' ? 'offline' : connection}`}><i />{broadcast ? airStatus : connection === 'live' ? 'LIVE' : connection === 'offline' ? 'OFFLINE' : 'WAITING'}</span>
               <span className="updated-at">{snapshot?.updatedAt ? `${connection === 'live' ? 'Updated' : 'Last successful update'} ${formatUpdated(snapshot.updatedAt)}` : 'Awaiting source'}</span>
               <button className="sound-quick" onClick={toggleAlertMute} aria-label="Mute live alerts" title={muteFutureAlerts ? 'Unmute live alerts' : 'Mute live alerts'} aria-pressed={muteFutureAlerts}>
                 {muteFutureAlerts ? <BellOff size={17} /> : <BellRing size={17} />}
@@ -111,11 +154,13 @@ export default function App() {
             </div>
             <div className="intro-actions">
               <BackgroundMusic ducked={Boolean(activeAlert)} />
+              <button className="preview-button broadcast-launch" onClick={startBroadcast}>Broadcast mode</button>
               <button className="preview-button" onClick={() => setPreviewAlert(true)}><BellRing size={16} /> Preview alert</button>
             </div>
           </div>
         </header>
 
+        {broadcast ? <Broadcast snapshot={snapshot} movement={movement} raceNews={raceNews} /> : <>
         {(connection !== 'live' || showWarnings) && <div className={`connection-notice ${showWarnings ? 'degraded' : connection}`} role="status">
           <Radio size={17} />
           <div><strong>{showWarnings ? 'Some GitHub data is unavailable' : connection === 'offline' ? 'Portwatch is unreachable' : 'Waiting for Portwatch data'}</strong>
@@ -140,14 +185,30 @@ export default function App() {
 
         <div id="teams"><TeamTable teams={teams} /></div>
         <footer className="source-line"><span>Race data: <a href="https://portwatch-vi.xyz/" target="_blank" rel="noreferrer">portwatch-vi.xyz</a></span><span>PR alerts check every 10 seconds · race stats refresh every 5 minutes</span></footer>
+        </>}
       </main>
 
       <span className="sr-only" role="status" aria-atomic="true">
-        {activeAlert && `${previewAlert ? 'Preview. ' : ''}${activeAlert.team} pull request #${activeAlert.number ?? 'unknown'} ${activeAlert.kind}. ${activeAlert.title}`}
+        {activeAlert && `${previewAlert ? 'Preview. ' : ''}${activeAlert.team} ${activeAlert.number == null ? alertLabels[activeAlert.kind] : `pull request #${activeAlert.number} ${activeAlert.kind}`}. ${activeAlert.title}`}
       </span>
-      <TransientPRAlert key={`${activeAlert?.id ?? 'none'}-${activeAlert?.kind ?? ''}`} event={activeAlert} preview={previewAlert} onDismiss={dismissAlert} />
+      {broadcast && activeAlert ? <AirAlert key={activeAlert.id + activeAlert.kind} event={activeAlert} dismiss={dismissAlert} /> : <TransientPRAlert key={`${activeAlert?.id ?? 'none'}-${activeAlert?.kind ?? ''}`} event={activeAlert} preview={previewAlert} onDismiss={dismissAlert} />}
     </div>
   );
+}
+
+const alertLabels = { opened: 'Pull request opened', closed: 'Pull request closed', merged: 'Pull request merged', position: 'Leaderboard change', milestone: 'Milestone reached' };
+
+function AirAlert({ event, dismiss }) {
+  useEffect(() => {
+    const timer = setTimeout(dismiss, 6500);
+    return () => clearTimeout(timer);
+  }, [dismiss]);
+  const Icon = { merged: GitMerge, milestone: Flag, position: TrendingUp }[event.kind] ?? GitPullRequest;
+  return <aside className={'air-alert air-alert-' + event.kind} style={{ '--team': event.teamColor }}>
+    <small><Icon size="1.2em" aria-hidden="true" /> {alertLabels[event.kind]}</small>
+    <b>{event.team}{event.number != null && ' · #' + event.number}</b>
+    <span>{event.title}</span>
+  </aside>;
 }
 
 function formatUpdated(value) {

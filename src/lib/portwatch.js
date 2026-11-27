@@ -35,6 +35,10 @@ function normalizeSnapshot(payload) {
     sourceWarnings: Array.isArray(payload.sourceWarnings)
       ? payload.sourceWarnings.filter((warning) => typeof warning === 'string' && warning.trim())
       : [],
+    raceObservedAt: finiteNumber(payload.raceObservedAt) ?? Date.parse(payload.updatedAt),
+    raceCached: Boolean(payload.raceCached),
+    history: Array.isArray(payload.history) ? payload.history : [],
+    developments: Array.isArray(payload.developments) ? payload.developments : [],
     teams: teams.map(normalizeTeam),
     events: events.map(normalizeEvent),
     pullRequests: pullRequests.map(normalizePullRequest),
@@ -50,6 +54,7 @@ function normalizeTeam(team, index) {
     stage: team.stage ?? null,
     openPullRequests: finiteNumber(team.openPullRequests ?? team.open_prs),
     mergedToday: finiteNumber(team.mergedToday ?? team.merged_today),
+    mergedTotal: finiteNumber(team.mergedTotal),
     totalPullRequests: finiteNumber(team.totalPullRequests ?? team.total_prs),
     stars: finiteNumber(team.stars),
     activity: finiteNumber(team.activity),
