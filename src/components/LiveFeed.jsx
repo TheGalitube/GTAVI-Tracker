@@ -1,13 +1,24 @@
+import { useState } from 'react';
 import { GitPullRequest, CircleCheck, CircleDot, CircleX, ExternalLink } from 'lucide-react';
 
 const statusIcon = { opened: CircleDot, merged: CircleCheck, closed: CircleX };
 
 export default function LiveFeed({ events = [] }) {
+  const [filter, setFilter] = useState('all');
+  const visibleEvents = (filter === 'all' ? events : events.filter((event) => event.kind === filter)).slice(0, 6);
   return (
     <section className="feed-panel">
-      <header className="panel-heading"><GitPullRequest size={17} /><h2>Live pull request feed</h2><span className="feed-sort">Recent activity <span aria-hidden="true">⌄</span></span></header>
+      <header className="panel-heading">
+        <GitPullRequest size={17} /><h2>Live pull request feed</h2>
+        <select className="feed-filter" aria-label="Filter pull request activity" value={filter} onChange={(event) => setFilter(event.target.value)}>
+          <option value="all">All activity</option>
+          <option value="opened">Opened</option>
+          <option value="merged">Merged</option>
+          <option value="closed">Closed</option>
+        </select>
+      </header>
       <div className="feed-items">
-        {events.slice(0, 6).map((event) => {
+        {visibleEvents.map((event) => {
           const Status = statusIcon[event.kind] || CircleDot;
           const row = <>
             <Status className={`feed-status ${event.kind}`} size={15} />
@@ -20,7 +31,9 @@ export default function LiveFeed({ events = [] }) {
             ? <a className="feed-row" key={event.id} href={event.url} target="_blank" rel="noreferrer">{row}</a>
             : <div className="feed-row" key={event.id}>{row}</div>;
         })}
-        {events.length === 0 && <div className="empty-feed">Recent pull request activity will appear here.</div>}
+        {visibleEvents.length === 0 && <div className="empty-feed" role="status">
+          {filter === 'all' ? 'Recent pull request activity will appear here.' : `No recent ${filter} pull requests.`}
+        </div>}
       </div>
     </section>
   );

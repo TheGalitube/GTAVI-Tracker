@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from 'react';
-import { BellRing, ChevronDown, ExternalLink, Radio, Volume2, VolumeX } from 'lucide-react';
+import { BellOff, BellRing, ChevronDown, ExternalLink, Radio, Volume2, VolumeX } from 'lucide-react';
 import RaceProgress from './components/RaceProgress.jsx';
 import CurrentPullRequest from './components/CurrentPullRequest.jsx';
 import LiveFeed from './components/LiveFeed.jsx';
@@ -52,12 +52,13 @@ export default function App() {
   }, [playChime, muteFutureAlerts]);
 
   const { snapshot, connection, error } = usePortwatch(onEvents);
-  const sourceWarning = snapshot?.sourceWarnings?.[0];
+  const sourceWarnings = snapshot?.sourceWarnings ?? [];
+  const showWarnings = connection === 'live' && sourceWarnings.length > 0;
   const teams = snapshot?.teams ?? [];
   const teamColors = new Map(teams.map((team) => [team.name.toLowerCase(), team.color]));
   const feedEvents = (snapshot?.events ?? []).map((event) => ({
     ...event,
-    teamColor: teamColors.get(event.team.toLowerCase()),
+    teamColor: event.teamColor ?? teamColors.get(event.team.toLowerCase()),
   }));
   const openPullRequests = (snapshot?.pullRequests ?? []).filter((event) => event.kind === 'opened');
   const activeAlert = previewAlert ? previewEvent : alerts[0] ?? null;
@@ -72,10 +73,17 @@ export default function App() {
     }
   };
 
-  const dismissAlert = () => {
+  const toggleAlertMute = () => {
+    const muted = !muteFutureAlerts;
+    setMuteFutureAlerts(muted);
+    localStorage.setItem('portrace:mute-alerts', muted ? 'on' : 'off');
+    if (muted) setAlerts([]);
+  };
+
+  const dismissAlert = useCallback(() => {
     if (previewAlert) setPreviewAlert(false);
     else setAlerts((current) => current.slice(1));
-  };
+  }, [previewAlert]);
 
   return (
     <div className="app-shell">
@@ -86,8 +94,8 @@ export default function App() {
             <div className="intro-status">
               <span className={`live-indicator ${connection}`}><i />{connection === 'live' ? 'LIVE' : connection === 'offline' ? 'OFFLINE' : 'WAITING'}</span>
               <span className="updated-at">{snapshot?.updatedAt ? `Updated ${formatUpdated(snapshot.updatedAt)}` : 'Awaiting source'}</span>
-              <button className="sound-quick" onClick={() => { const muted = !muteFutureAlerts; setMuteFutureAlerts(muted); localStorage.setItem('portrace:mute-alerts', muted ? 'on' : 'off'); }} aria-label={muteFutureAlerts ? 'Enable alerts' : 'Mute future alerts'} aria-pressed={muteFutureAlerts}>
-                <BellRing size={17} />
+              <button className="sound-quick" onClick={toggleAlertMute} aria-label="Mute live alerts" title={muteFutureAlerts ? 'Unmute live alerts' : 'Mute live alerts'} aria-pressed={muteFutureAlerts}>
+                {muteFutureAlerts ? <BellOff size={17} /> : <BellRing size={17} />}
               </button>
               <button className="sound-quick" onClick={() => changeSound(!soundEnabled)} aria-label={soundEnabled ? 'Turn sound off' : 'Turn sound on'} aria-pressed={soundEnabled}>
                 {soundEnabled ? <Volume2 size={17} /> : <VolumeX size={17} />}
@@ -107,10 +115,11 @@ export default function App() {
           </div>
         </header>
 
-        {(connection !== 'live' || sourceWarning) && <div className={`connection-notice ${sourceWarning && connection === 'live' ? 'degraded' : connection}`} role="status">
+        {(connection !== 'live' || showWarnings) && <div className={`connection-notice ${showWarnings ? 'degraded' : connection}`} role="status">
           <Radio size={17} />
-          <div><strong>{sourceWarning && connection === 'live' ? 'Some GitHub data is unavailable' : connection === 'offline' ? 'Portwatch is unreachable' : 'Waiting for Portwatch data'}</strong><span>{sourceWarning && connection === 'live' ? sourceWarning : error || 'Live race data will appear here once the feed is connected.'}</span></div>
-          {!(sourceWarning && connection === 'live') && <a href="https://portwatch-vi.xyz/" target="_blank" rel="noreferrer">Open source <ExternalLink size={13} /></a>}
+          <div><strong>{showWarnings ? 'Some GitHub data is unavailable' : connection === 'offline' ? 'Portwatch is unreachable' : 'Waiting for Portwatch data'}</strong>
+            {showWarnings ? sourceWarnings.map((warning) => <span key={warning}>{warning}</span>) : <span>{error || 'Live race data will appear here once the feed is connected.'}</span>}</div>
+          {!showWarnings && <a href="https://portwatch-vi.xyz/" target="_blank" rel="noreferrer">Open source <ExternalLink size={13} /></a>}
         </div>}
 
         <div className="primary-grid">

@@ -17,7 +17,7 @@ export function usePortwatch(onEvents) {
     let controller;
 
     const refresh = async () => {
-      controller?.abort();
+      if (controller) return;
       controller = new AbortController();
       try {
         const next = await fetchPortwatchSnapshot(controller.signal);
@@ -43,6 +43,8 @@ export function usePortwatch(onEvents) {
         if (stopped || failure.name === 'AbortError') return;
         setConnection('offline');
         setError(failure.message || 'The feed could not be reached.');
+      } finally {
+        controller = null;
       }
     };
 

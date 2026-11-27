@@ -32,6 +32,9 @@ function normalizeSnapshot(payload) {
   return {
     state: 'connected',
     updatedAt: payload.updatedAt || payload.updated_at || new Date().toISOString(),
+    sourceWarnings: Array.isArray(payload.sourceWarnings)
+      ? payload.sourceWarnings.filter((warning) => typeof warning === 'string' && warning.trim())
+      : [],
     teams: teams.map(normalizeTeam),
     events: events.map(normalizeEvent),
     pullRequests: pullRequests.map(normalizePullRequest),
@@ -75,6 +78,7 @@ function normalizeEvent(event, index) {
     title: String(event.title ?? event.pull_request?.title ?? 'Pull request update'),
     team: String(event.team ?? event.repository_owner ?? event.author_association ?? 'Unknown team'),
     author: String(event.author ?? event.user?.login ?? event.login ?? 'Contributor'),
+    teamColor: event.teamColor,
     avatarUrl: event.avatarUrl ?? event.user?.avatar_url ?? event.actor?.avatar_url ?? null,
     additions: finiteNumber(event.additions),
     deletions: finiteNumber(event.deletions),
@@ -93,6 +97,7 @@ function normalizePullRequest(pr, index) {
 }
 
 function finiteNumber(value) {
+  if (typeof value !== 'number' && (typeof value !== 'string' || !value.trim())) return null;
   const number = Number(value);
   return Number.isFinite(number) ? number : null;
 }
