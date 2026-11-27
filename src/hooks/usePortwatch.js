@@ -7,6 +7,8 @@ export function usePortwatch(onEvents) {
   const [snapshot, setSnapshot] = useState(null);
   const [connection, setConnection] = useState('connecting');
   const [error, setError] = useState('');
+  const refreshRef = useRef(null);
+  const [retrying, setRetrying] = useState(false);
   const previous = useRef(null);
   const seenEvents = useRef(new Set());
   const notify = useRef(onEvents);
@@ -16,8 +18,9 @@ export function usePortwatch(onEvents) {
     let stopped = false;
     let controller;
 
-    const refresh = async () => {
+    const refresh = async (manual = false) => {
       if (controller) return;
+      if (manual) setRetrying(true);
       controller = new AbortController();
       try {
         const next = await fetchPortwatchSnapshot(controller.signal);
@@ -45,17 +48,23 @@ export function usePortwatch(onEvents) {
         setError(failure.message || 'The feed could not be reached.');
       } finally {
         controller = null;
+        if (!stopped) setRetrying(false);
       }
     };
 
+    refreshRef.current = refresh;
+    const onOnline = () => refresh();
+    window.addEventListener('online', onOnline);
     refresh();
     const timer = window.setInterval(refresh, POLL_MS);
     return () => {
       stopped = true;
+      refreshRef.current = null;
+      window.removeEventListener('online', onOnline);
       controller?.abort();
       window.clearInterval(timer);
     };
   }, []);
 
-  return { snapshot, connection, error };
+  return { snapshot, connection, error, retrying, retry: () => refreshRef.current?.(true) };
 }

@@ -15,15 +15,18 @@ const accents = {
   merged: '#48dca1',
 };
 
-export default function TransientPRAlert({ event, onDismiss }) {
+export default function TransientPRAlert({ event, preview, onDismiss }) {
   const [leaving, setLeaving] = useState(false);
   const [avatarFailed, setAvatarFailed] = useState(false);
 
   useEffect(() => {
     if (!event) return undefined;
+    const onKey = (e) => { if (e.key === 'Escape') onDismiss(); };
+    window.addEventListener('keydown', onKey);
     const exitTimer = window.setTimeout(() => setLeaving(true), ALERT_DURATION);
     const dismissTimer = window.setTimeout(onDismiss, ALERT_DURATION + EXIT_DURATION);
     return () => {
+      window.removeEventListener('keydown', onKey);
       window.clearTimeout(exitTimer);
       window.clearTimeout(dismissTimer);
     };
@@ -39,14 +42,11 @@ export default function TransientPRAlert({ event, onDismiss }) {
     <div
       className={`transient-alert ${leaving ? 'is-leaving' : ''}`}
       style={{ '--alert-accent': accent, '--alert-team': event.teamColor || '#35c58a' }}
-      role="status"
-      aria-live="assertive"
-      aria-atomic="true"
     >
       <div className="transient-alert__content">
         <div className="transient-alert__eyeline">
           <span className="transient-alert__team">{event.team || 'TEAM'}</span>
-          <span className="transient-alert__label">{copy.label}</span>
+          <span className="transient-alert__label">{preview ? 'PREVIEW ALERT' : copy.label}</span>
         </div>
         <h2 className="transient-alert__headline">{copy.title}</h2>
         <div className="transient-alert__summary">
@@ -63,6 +63,10 @@ export default function TransientPRAlert({ event, onDismiss }) {
           <AnimatedCount className="transient-alert__additions" value={event.additions} prefix="+" />
           <AnimatedCount className="transient-alert__deletions" value={event.deletions} prefix="−" />
           <span className="transient-alert__files">{event.files ?? '—'} files</span>
+        </div>
+        <div className="transient-actions">
+          {event.url && <a href={event.url} target="_blank" rel="noreferrer">Open pull request ↗</a>}
+          <button onClick={onDismiss}>Dismiss</button>
         </div>
       </div>
     </div>

@@ -84,7 +84,7 @@ function normalizeEvent(event, index) {
     deletions: finiteNumber(event.deletions),
     files: finiteNumber(event.changed_files ?? event.files),
     commits: finiteNumber(event.commits),
-    timestamp: event.timestamp ?? event.updated_at ?? event.created_at ?? new Date().toISOString(),
+    timestamp: event.timestamp ?? event.updated_at ?? event.created_at ?? null,
     url: event.url ?? event.html_url ?? null,
   };
 }

@@ -15,6 +15,7 @@ const previewEvent = {
 };
 
 export default function App() {
+  const [raceExpanded, setRaceExpanded] = useState(true);
   const [alerts, setAlerts] = useState([]);
   const [previewAlert, setPreviewAlert] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(() => localStorage.getItem('portrace:sound') === 'on');
@@ -51,7 +52,7 @@ export default function App() {
     playChime();
   }, [playChime, muteFutureAlerts]);
 
-  const { snapshot, connection, error } = usePortwatch(onEvents);
+  const { snapshot, connection, error, retry, retrying } = usePortwatch(onEvents);
   const sourceWarnings = snapshot?.sourceWarnings ?? [];
   const showWarnings = connection === 'live' && sourceWarnings.length > 0;
   const teams = snapshot?.teams ?? [];
@@ -93,7 +94,7 @@ export default function App() {
             <div className="brand"><span className="brand-mark" aria-hidden="true">&gt;_</span><strong>PortRace</strong></div>
             <div className="intro-status">
               <span className={`live-indicator ${connection}`}><i />{connection === 'live' ? 'LIVE' : connection === 'offline' ? 'OFFLINE' : 'WAITING'}</span>
-              <span className="updated-at">{snapshot?.updatedAt ? `Updated ${formatUpdated(snapshot.updatedAt)}` : 'Awaiting source'}</span>
+              <span className="updated-at">{snapshot?.updatedAt ? `${connection === 'live' ? 'Updated' : 'Last successful update'} ${formatUpdated(snapshot.updatedAt)}` : 'Awaiting source'}</span>
               <button className="sound-quick" onClick={toggleAlertMute} aria-label="Mute live alerts" title={muteFutureAlerts ? 'Unmute live alerts' : 'Mute live alerts'} aria-pressed={muteFutureAlerts}>
                 {muteFutureAlerts ? <BellOff size={17} /> : <BellRing size={17} />}
               </button>
@@ -119,14 +120,20 @@ export default function App() {
           <Radio size={17} />
           <div><strong>{showWarnings ? 'Some GitHub data is unavailable' : connection === 'offline' ? 'Portwatch is unreachable' : 'Waiting for Portwatch data'}</strong>
             {showWarnings ? sourceWarnings.map((warning) => <span key={warning}>{warning}</span>) : <span>{error || 'Live race data will appear here once the feed is connected.'}</span>}</div>
+          {connection !== 'live' && connection !== 'connecting' && <button className="text-control" disabled={retrying} onClick={retry}>{retrying ? 'Retrying…' : 'Retry now'}</button>}
           {!showWarnings && <a href="https://portwatch-vi.xyz/" target="_blank" rel="noreferrer">Open source <ExternalLink size={13} /></a>}
         </div>}
 
         <div className="primary-grid">
           <div className="race-column" id="race">
-            <div className="section-heading"><div><span className="section-kicker">RACE TO PLAYABLE</span><ChevronDown size={15} /></div><span>{teams.length ? `${teams.length} teams` : 'No team data'}</span></div>
-            <RaceProgress teams={teams} />
-            <CurrentPullRequest key={JSON.stringify(openPullRequests.map(({ id }) => id))} pullRequests={openPullRequests} />
+            <div className="section-heading">
+              <button className="race-toggle" aria-expanded={raceExpanded} aria-controls="race-standings" onClick={() => setRaceExpanded(!raceExpanded)}>
+                <span className="section-kicker">RACE TO PLAYABLE</span><ChevronDown size={15} />
+              </button>
+              <span>{teams.length ? `${teams.length} teams` : 'No team data'}</span>
+            </div>
+            <div id="race-standings" hidden={!raceExpanded}><RaceProgress teams={teams} /></div>
+            <CurrentPullRequest pullRequests={openPullRequests} />
           </div>
           <div id="pull-requests"><LiveFeed events={feedEvents} /></div>
         </div>
@@ -135,7 +142,10 @@ export default function App() {
         <footer className="source-line"><span>Race data: <a href="https://portwatch-vi.xyz/" target="_blank" rel="noreferrer">portwatch-vi.xyz</a></span><span>PR alerts check every 10 seconds · race stats refresh every 5 minutes</span></footer>
       </main>
 
-      <TransientPRAlert key={`${activeAlert?.id ?? 'none'}-${activeAlert?.kind ?? ''}`} event={activeAlert} onDismiss={dismissAlert} />
+      <span className="sr-only" role="status" aria-atomic="true">
+        {activeAlert && `${previewAlert ? 'Preview. ' : ''}${activeAlert.team} pull request #${activeAlert.number ?? 'unknown'} ${activeAlert.kind}. ${activeAlert.title}`}
+      </span>
+      <TransientPRAlert key={`${activeAlert?.id ?? 'none'}-${activeAlert?.kind ?? ''}`} event={activeAlert} preview={previewAlert} onDismiss={dismissAlert} />
     </div>
   );
 }
