@@ -15,17 +15,22 @@ const previewEvent = {
   team: 'Victory', author: 'romeawayfromhome-rgb', additions: 4, deletions: 1, files: 2,
 };
 
+function isBroadcastRoute() {
+  const path = location.pathname.replace(/\/$/, '');
+  return path === '' || path === '/index.html' || path === '/broadcast';
+}
+
 export default function App() {
-  const [broadcast, setBroadcast] = useState(() => location.pathname.replace(/\/$/, '') === '/broadcast');
+  const [broadcast, setBroadcast] = useState(isBroadcastRoute);
   useEffect(() => {
-    const sync = () => setBroadcast(location.pathname.replace(/\/$/, '') === '/broadcast');
+    const sync = () => setBroadcast(isBroadcastRoute());
     window.addEventListener('popstate', sync);
     return () => window.removeEventListener('popstate', sync);
   }, []);
   useEffect(() => {
     if (!broadcast) return;
     const leave = () => {
-      history.replaceState(null, '', '/');
+      history.replaceState(null, '', '/dashboard');
       setBroadcast(false);
       if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
     };
